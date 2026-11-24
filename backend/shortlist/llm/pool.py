@@ -102,6 +102,10 @@ class KeyPool:
         for key in keys or []:
             self.add_key(key)
 
+    def now(self) -> datetime:
+        """Return the pool clock's current time."""
+        return self._clock()
+
     def add_key(self, key: PooledKey) -> None:
         """Register or replace a key in the pool."""
         with self._lock:
@@ -194,6 +198,78 @@ class KeyPool:
                 )
 
             return sorted(eligible, key=lambda k: (k.priority, k.id))
+
+    def retry_hint_seconds(
+        self,
+        provider: ProviderType,
+        model: str,
+        estimated_tokens: int = 0,
+    ) -> float | None:
+        """Return seconds until a currently-ineligible key may become usable again.
+
+        Only *temporary* blockers count: concurrency slots in use, per-minute
+        RPM/TPM windows, and cooldowns after a 429. Permanent blockers (invalid
+        or paused key, unsupported model, exhausted daily quota or monthly
+        budget) return no hint. ``None`` means no key for this (provider, model)
+        will recover soon, so waiting or requeueing is pointless.
+        """
+        with self._lock:
+            now = self._clock()
+            hints: list[float] = []
+            for key in self._keys.values():
+                if key.provider != provider or not key.supports_model(model):
+                    continue
+                if key.status in (KeyStatus.INVALID, KeyStatus.PAUSED):
+                    continue
+                if (
+                    key.monthly_budget_usd is not None
+                    and key.monthly_spend_usd >= key.monthly_budget_usd
+                ):
+                    continue
+                counters = self._counters[key.id]
+                if key.rpd_limit is not None and counters.current_rpd(now) >= key.rpd_limit:
+                    continue
+
+                wait = 0.0
+                if (
+                    key.status == KeyStatus.COOLDOWN
+                    and key.cooldown_until is not None
+                    and now < key.cooldown_until
+                ):
+                    wait = max(wait, (key.cooldown_until - now).total_seconds())
+                if key.rpm_limit is not None and counters.current_rpm(now) >= key.rpm_limit:
+                    oldest = counters.minute_requests[0]
+                    wait = max(wait, 60.0 - (now - oldest).total_seconds())
+                if (
+                    key.tpm_limit is not None
+                    and counters.minute_tokens
+                    and counters.current_tpm(now) + estimated_tokens > key.tpm_limit
+                ):
+                    oldest_tok = counters.minute_tokens[0][0]
+                    wait = max(wait, 60.0 - (now - oldest_tok).total_seconds())
+                if counters.in_flight >= key.concurrency:
+                    # A slot frees up when an in-flight call returns: poll soon.
+                    wait = max(wait, 1.0)
+                hints.append(max(1.0, wait))
+            return min(hints) if hints else None
+
+    def is_slot_contended(self, provider: ProviderType, model: str) -> bool:
+        """Return True if some key is blocked *only* because all its slots are in flight."""
+        with self._lock:
+            now = self._clock()
+            for key in self._keys.values():
+                if key.provider != provider:
+                    continue
+                counters = self._counters[key.id]
+                if counters.in_flight < key.concurrency:
+                    continue
+                counters.in_flight -= 1
+                try:
+                    if self._is_eligible_locked(key, model, 0, now):
+                        return True
+                finally:
+                    counters.in_flight += 1
+            return False
 
     def initialize_daily_count(self, key_id: str, count: int) -> None:
         """Initialize the daily request counter from persisted UsageLog at startup."""

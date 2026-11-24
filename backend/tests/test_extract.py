@@ -195,3 +195,19 @@ def test_detect_language() -> None:
     assert detect_language("Expérience professionnelle et formation en gestion") == "fr"
     assert detect_language("Experience and skills in supply chain management") == "en"
     assert detect_language("12345 67890") == "unknown"
+
+
+def test_white_text_on_dark_sidebar_is_not_flagged_as_hidden() -> None:
+    doc = fitz.open()
+    page = doc.new_page(width=595, height=842)
+    # Dark navy sidebar on the left with white visible text
+    page.draw_rect(fitz.Rect(0, 0, 180, 842), color=None, fill=(0.08, 0.16, 0.30))
+    page.insert_text((20, 80), "LANGUAGES: French, English", fontsize=11, color=(1, 1, 1))
+    page.insert_text((220, 80), "Supply Chain Experience " * 12, fontsize=11, color=(0, 0, 0))
+    pdf_bytes = doc.tobytes()
+    doc.close()
+
+    result = extract_cv(pdf_bytes, "sidebar.pdf", enable_ocr=False)
+    assert result.status == ExtractionStatus.EXTRACTED
+    assert result.hidden_text_findings == []
+    assert "LANGUAGES: French, English" in result.text

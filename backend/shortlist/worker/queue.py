@@ -29,12 +29,18 @@ from shortlist.db.models import (
     UsageLog,
 )
 from shortlist.llm.pool import KeyPool
-from shortlist.llm.router import BudgetExceededError, LLMRouter
+from shortlist.llm.router import AllKeysExhaustedError, BudgetExceededError, LLMRouter
 from shortlist.schemas.common import ExtractionStatus, JobStatus, RunStatus
 from shortlist.schemas.jobs import CriterionItem
 from shortlist.worker.llm_factory import build_llm_client_for_job, sync_pool_states_to_db
 
 logger = logging.getLogger("shortlist.worker.queue")
+
+# A task whose LLM call failed for a temporary reason (429, 5xx, busy keys) is
+# put back in the queue up to this many total attempts before being failed.
+MAX_TASK_ATTEMPTS = 5
+MIN_REQUEUE_DELAY_SECONDS = 5.0
+MAX_REQUEUE_DELAY_SECONDS = 180.0
 
 
 def _utcnow() -> datetime:
@@ -115,6 +121,9 @@ def claim_next_task(
         .join(AnalysisRun, AnalysisTask.run_id == AnalysisRun.id)
         .where(
             AnalysisTask.status == "pending",
+            # For a pending task, leased_until is a "not before" time set when a
+            # transient LLM failure requeued it with a back-off delay.
+            or_(AnalysisTask.leased_until.is_(None), AnalysisTask.leased_until <= now),
             AnalysisRun.status.in_([RunStatus.PENDING.value, RunStatus.RUNNING.value]),
         )
         .order_by(AnalysisTask.created_at.asc())
@@ -334,14 +343,16 @@ def process_task(
             ext_res = extract_cv(file_bytes, candidate.filename)
             candidate.extracted_text = ext_res.text
             candidate.extraction_status = ext_res.status.value
-            db.flush()
+            # Commit now: a flush would keep SQLite's write lock for the whole
+            # (slow) anonymization and LLM call and block every other worker.
+            db.commit()
 
         # 2. Anonymize locally if needed.
         if candidate.anonymized_text is None and candidate.extracted_text:
             anon_res = anonymize_text(candidate.extracted_text)
             candidate.anonymized_text = anon_res.anonymized_text
             candidate.encrypted_pii_map = anon_res.encrypt_mapping(secret_key)
-            db.flush()
+            db.commit()
 
         hidden_detected = candidate.extraction_status == ExtractionStatus.HIDDEN_TEXT_FLAGGED.value
         extraction_failed = (
@@ -387,6 +398,9 @@ def process_task(
                 remaining_budget_usd=remaining_budget,
                 shared_pool=shared_pool,
             )
+            # End the read transaction before the long LLM call: in WAL mode a
+            # write on a stale snapshot fails at once with "database is locked".
+            db.commit()
 
             eval_res = evaluate_cv(
                 candidate.anonymized_text or "",
@@ -482,6 +496,29 @@ def process_task(
                 {"candidate_id": candidate.id, "error": str(exc)},
             ]
         db.commit()
+    except AllKeysExhaustedError as exc:
+        db.rollback()
+        task = db.get(AnalysisTask, task_id)
+        if task is not None and exc.retryable and task.attempts < MAX_TASK_ATTEMPTS:
+            delay = min(
+                MAX_REQUEUE_DELAY_SECONDS,
+                max(MIN_REQUEUE_DELAY_SECONDS, float(exc.retry_after_seconds or 0.0))
+                * (1 + 0.5 * (task.attempts - 1)),
+            )
+            logger.warning(
+                "Task %s: LLM temporarily unavailable, retry %d/%d in %.0fs",
+                task_id,
+                task.attempts,
+                MAX_TASK_ATTEMPTS,
+                delay,
+            )
+            task.status = "pending"
+            task.worker_id = None
+            task.leased_until = _utcnow() + timedelta(seconds=delay)
+            task.last_error = f"Retrying in {delay:.0f}s: {summarize_llm_error(exc)}"
+            db.commit()
+            return
+        _fail_task(db, task_id, candidate.id, summarize_llm_error(exc), detail=str(exc))
     except Exception as exc:
         logger.exception("Failed processing task %s", task_id)
         db.rollback()
@@ -499,3 +536,112 @@ def process_task(
             ]
             _refresh_run_progress(db, run.id)
         db.commit()
+
+
+_LLM_ERROR_MESSAGES = {
+    "rate_limit": "LLM provider rate limit or quota reached.",
+    "overloaded": "LLM provider temporarily overloaded (503).",
+    "timeout": "LLM provider timed out.",
+    "auth": "API key rejected by the provider (invalid or revoked).",
+    "no_keys": "No usable API key (daily quota, budget, or model not allowed).",
+    "all_failed": "All configured models failed.",
+    "unknown": "Unexpected error while analysing this CV.",
+}
+
+
+def llm_error_code(text: str) -> str:
+    """Classify a stored error string into a stable code the UI can translate."""
+    low = text.lower()
+    if "429" in low or "ratelimit" in low or "rate limit" in low or "quota" in low:
+        return "rate_limit"
+    if "resource_exhausted" in low:
+        return "rate_limit"
+    if "503" in low or "unavailable" in low or "overloaded" in low or "high demand" in low:
+        return "overloaded"
+    if "timeout" in low or "timed out" in low:
+        return "timeout"
+    if "authentication" in low or "401" in low or "403" in low or "rejected" in low:
+        return "auth"
+    if "no eligible keys" in low or "no usable api key" in low:
+        return "no_keys"
+    if "exhausted" in low or "models failed" in low:
+        return "all_failed"
+    return "unknown"
+
+
+def summarize_llm_error(exc: AllKeysExhaustedError | str) -> str:
+    """Turn a verbose provider error chain into one human-readable sentence."""
+    text = " ".join(exc.attempts) if isinstance(exc, AllKeysExhaustedError) else exc
+    return _LLM_ERROR_MESSAGES[llm_error_code(text)]
+
+
+def candidate_analysis_states(
+    db: Session,
+    job_id: str,
+    criteria_version: int | None,
+) -> dict[str, tuple[str, str | None]]:
+    """Return {candidate_id: (status, error_code)} for every candidate of a job.
+
+    status is one of: done (evaluated with the current criteria version),
+    queued, running, failed, not_analyzed. It is derived from the candidate's
+    most recent AnalysisTask when no current-version evaluation exists.
+    """
+    candidate_ids = list(db.scalars(select(Candidate.id).where(Candidate.job_id == job_id)).all())
+    evaluated: set[str] = set()
+    if criteria_version is not None and candidate_ids:
+        evaluated = set(
+            db.scalars(
+                select(Evaluation.candidate_id).where(
+                    Evaluation.candidate_id.in_(candidate_ids),
+                    Evaluation.criteria_set_version == criteria_version,
+                )
+            ).all()
+        )
+    latest_task: dict[str, AnalysisTask] = {}
+    for task in db.scalars(
+        select(AnalysisTask)
+        .where(AnalysisTask.job_id == job_id)
+        .order_by(AnalysisTask.created_at.asc())
+    ).all():
+        latest_task[task.candidate_id] = task
+
+    states: dict[str, tuple[str, str | None]] = {}
+    for cid in candidate_ids:
+        if cid in evaluated:
+            states[cid] = ("done", None)
+            continue
+        task = latest_task.get(cid)
+        if task is None or task.status == "completed":
+            states[cid] = ("not_analyzed", None)
+        elif task.status == "leased":
+            states[cid] = ("running", None)
+        elif task.status == "pending":
+            retry_code = llm_error_code(task.last_error) if task.last_error else None
+            states[cid] = ("queued", retry_code)
+        else:
+            states[cid] = ("failed", llm_error_code(task.last_error or ""))
+    return states
+
+
+def _fail_task(
+    db: Session,
+    task_id: str,
+    candidate_id: str,
+    message: str,
+    *,
+    detail: str | None = None,
+) -> None:
+    task = db.get(AnalysisTask, task_id)
+    run = db.get(AnalysisRun, task.run_id) if task else None
+    if task is not None:
+        task.status = "failed"
+        task.worker_id = None
+        task.leased_until = None
+        task.last_error = detail or message
+    if run is not None:
+        run.errors = [
+            *list(run.errors or []),
+            {"candidate_id": candidate_id, "error": message},
+        ]
+        _refresh_run_progress(db, run.id)
+    db.commit()

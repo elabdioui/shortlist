@@ -114,6 +114,15 @@ class CandidateSummary(BaseModel):
     mandatory_total: int = 0
     model_used: str | None = None
     fallback_used: bool = False
+    # Analysis lifecycle, so the UI can explain rows without a score.
+    # done | queued | running | failed | not_analyzed
+    analysis_status: str = "not_analyzed"
+    # rate_limit | overloaded | timeout | auth | no_keys | all_failed | unknown
+    analysis_error_code: str | None = None
+    # Criteria grid version the displayed score was computed with, and whether
+    # the grid was edited since (the score is then outdated).
+    criteria_set_version: int | None = None
+    is_stale: bool = False
 
 
 class CandidateDetail(BaseModel):

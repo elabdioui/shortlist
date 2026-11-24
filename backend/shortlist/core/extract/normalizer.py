@@ -12,7 +12,10 @@ MAX_APPROX_TOKENS = 6000
 CHARS_PER_TOKEN = 4
 
 _SOFT_HYPHEN_BREAK_RE = re.compile(r"([A-Za-zÀ-ÿ])-\n([a-zà-ÿ])")
-_BULLET_RE = re.compile(r"^[\s]*[•▪◦‣●\uf0a7□■\u2013\u2014]\s*", re.MULTILINE)
+# Horizontal whitespace only: a bullet must never swallow the newlines before it.
+_BULLET_RE = re.compile(r"^[ \t]*[•▪◦‣●\uf0a7□■\u2013\u2014][ \t]*", re.MULTILINE)
+# Bullet glyphs extracted as their own PDF block leave lines holding only "-".
+_LONE_BULLET_LINE_RE = re.compile(r"^[ \t]*-[ \t]*$\n?", re.MULTILINE)
 _MULTI_SPACE_RE = re.compile(r"[ \t\f\v]+")
 _MULTI_NEWLINE_RE = re.compile(r"\n{3,}")
 
@@ -111,6 +114,7 @@ def normalize_text(
     cleaned = _SOFT_HYPHEN_BREAK_RE.sub(r"\1\2", cleaned)
     cleaned = _BULLET_RE.sub("- ", cleaned)
     cleaned = "\n".join(_MULTI_SPACE_RE.sub(" ", line).strip() for line in cleaned.split("\n"))
+    cleaned = _LONE_BULLET_LINE_RE.sub("", cleaned)
     cleaned = _MULTI_NEWLINE_RE.sub("\n\n", cleaned).strip()
 
     max_chars = max_tokens * CHARS_PER_TOKEN

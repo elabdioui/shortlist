@@ -201,17 +201,27 @@ def test_shared_keypool_rpm_limit_across_4_threads(
         eval_count = int(db.scalar(select(func.count(Evaluation.id))) or 0)
         assert eval_count == 2  # Only 2 allowed in the first 60s window!
 
-        # Advance clock past 60s window and re-queue the 4 failed tasks.
+        # RPM-blocked tasks are not failed: they are requeued with a "not before"
+        # delay (leased_until) derived from the RPM window, and the run stays open.
+        delayed = list(
+            db.scalars(
+                select(AnalysisTask).where(
+                    AnalysisTask.run_id == run_id, AnalysisTask.status == "pending"
+                )
+            ).all()
+        )
+        assert len(delayed) == 4
+        assert all(t.leased_until is not None for t in delayed)
+        assert all("Retrying" in (t.last_error or "") for t in delayed)
+        run = db.get(AnalysisRun, run_id)
+        assert run is not None and run.status == "running"
+
+        # Advance clock past 60s window and make the delayed tasks due now.
         current_time[0] = current_time[0] + timedelta(seconds=61)
         db.execute(
             update(AnalysisTask)
-            .where(AnalysisTask.run_id == run_id, AnalysisTask.status == "failed")
-            .values(status="pending", last_error=None)
-        )
-        db.execute(
-            update(AnalysisRun)
-            .where(AnalysisRun.id == run_id)
-            .values(status="running", finished_at=None)
+            .where(AnalysisTask.run_id == run_id, AnalysisTask.status == "pending")
+            .values(leased_until=None)
         )
         db.commit()
 

@@ -11,8 +11,8 @@ import {
   useReactTable,
   type SortingState,
 } from "@tanstack/react-table";
-import { AlertTriangle, ArrowUpDown, Download, ExternalLink } from "lucide-react";
-import Link from "next/link";
+import { AlertTriangle, ArrowUpDown, ChevronRight, Download, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { Alert } from "@/components/ui/alert";
@@ -22,6 +22,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/input";
 import { jobsApi } from "@/lib/api/client";
 import type { CandidateSummary, HumanDecision, Recommendation } from "@/lib/api/types";
+
+type AnalysisStatus = "done" | "queued" | "running" | "failed" | "not_analyzed";
 
 const columnHelper = createColumnHelper<CandidateSummary>();
 
@@ -49,8 +51,9 @@ function decVariant(dec: HumanDecision): "success" | "danger" | "default" {
   }
 }
 
-export function RankingTab({ jobId }: { jobId: string }) {
+export function RankingTab({ jobId, runActive = false }: { jobId: string; runActive?: boolean }) {
   const t = useTranslations();
+  const router = useRouter();
 
   const [recommendation, setRecommendation] = useState<Recommendation | "">("");
   const [decision, setDecision] = useState<HumanDecision | "">("");
@@ -67,6 +70,7 @@ export function RankingTab({ jobId }: { jobId: string }) {
         limit: 500,
         offset: 0,
       }),
+    refetchInterval: runActive ? 3000 : false,
   });
 
   const items = useMemo(() => rankingQuery.data?.items ?? [], [rankingQuery.data?.items]);
@@ -78,6 +82,7 @@ export function RankingTab({ jobId }: { jobId: string }) {
       review: 0,
       not_retained: 0,
       manual_review: 0,
+      unscored: 0,
     };
     const models = new Set<string>();
     let anyFallback = false;
@@ -87,6 +92,7 @@ export function RankingTab({ jobId }: { jobId: string }) {
       else if (item.recommendation === "review") counts.review += 1;
       else if (item.recommendation === "not_retained") counts.not_retained += 1;
       else if (item.recommendation === "manual_review") counts.manual_review += 1;
+      else counts.unscored += 1;
 
       if (item.model_used) models.add(item.model_used);
       if (item.fallback_used) anyFallback = true;
@@ -108,9 +114,17 @@ export function RankingTab({ jobId }: { jobId: string }) {
         id: "score",
         header: t("job.ranking.colScore"),
         cell: (info) => {
-          const raw = info.row.original.score;
+          const row = info.row.original;
+          const raw = row.score;
           return (
-            <span className="font-semibold tabular-nums">
+            <span
+              className={`font-semibold tabular-nums ${row.is_stale ? "text-[var(--muted-foreground)] line-through decoration-1" : ""}`}
+              title={
+                row.is_stale
+                  ? t("job.ranking.staleHint", { version: row.criteria_set_version ?? 1 })
+                  : undefined
+              }
+            >
               {raw != null ? `${Math.round(raw)}/100` : "—"}
             </span>
           );
@@ -119,8 +133,44 @@ export function RankingTab({ jobId }: { jobId: string }) {
       columnHelper.accessor("recommendation", {
         header: t("job.ranking.colRecommendation"),
         cell: (info) => {
+          const row = info.row.original;
           const rec = info.getValue();
-          return rec ? <Badge variant={recVariant(rec)}>{t(`recommendations.${rec}`)}</Badge> : "—";
+          const status = (row.analysis_status ?? "not_analyzed") as AnalysisStatus;
+          return (
+            <div className="flex flex-col items-start gap-1">
+              {rec && !row.is_stale ? (
+                <Badge variant={recVariant(rec)}>{t(`recommendations.${rec}`)}</Badge>
+              ) : null}
+              {row.is_stale && (
+                <Badge
+                  variant="outline"
+                  title={t("job.ranking.staleHint", { version: row.criteria_set_version ?? 1 })}
+                >
+                  {t("job.ranking.staleBadge")}
+                </Badge>
+              )}
+              {status !== "done" && (
+                <span
+                  className={`inline-flex items-center gap-1 text-xs ${
+                    status === "failed"
+                      ? "text-rose-700 dark:text-rose-300"
+                      : "text-[var(--muted-foreground)]"
+                  }`}
+                >
+                  {(status === "running" || status === "queued") && (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  )}
+                  {status === "failed" && <AlertTriangle className="h-3 w-3" />}
+                  <span>{t(`job.ranking.status.${status}`)}</span>
+                </span>
+              )}
+              {row.analysis_error_code && status !== "done" && (
+                <span className="max-w-[18rem] text-[11px] leading-snug text-[var(--muted-foreground)]">
+                  {t(`job.ranking.errors.${row.analysis_error_code}`)}
+                </span>
+              )}
+            </div>
+          );
         },
       }),
       columnHelper.accessor(
@@ -132,26 +182,12 @@ export function RankingTab({ jobId }: { jobId: string }) {
             const row = info.row.original;
             return (
               <span className="tabular-nums">
-                {row.mandatory_met}/{row.mandatory_total}
+                {row.score == null ? "—" : `${row.mandatory_met}/${row.mandatory_total}`}
               </span>
             );
           },
         }
       ),
-      columnHelper.accessor("model_used", {
-        header: t("job.ranking.colModel"),
-        cell: (info) => {
-          const row = info.row.original;
-          return (
-            <div className="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
-              <span>{row.model_used ?? "—"}</span>
-              {row.fallback_used && (
-                <Badge variant="warning">{t("job.ranking.fallbackBadge")}</Badge>
-              )}
-            </div>
-          );
-        },
-      }),
       columnHelper.accessor("decision", {
         header: t("job.ranking.colDecision"),
         cell: (info) => {
@@ -161,15 +197,8 @@ export function RankingTab({ jobId }: { jobId: string }) {
       }),
       columnHelper.display({
         id: "open",
-        header: t("job.ranking.colOpen"),
-        cell: (info) => (
-          <Link href={`/candidates/${info.row.original.id}`}>
-            <Button variant="outline" size="sm">
-              <span>{t("job.ranking.openDetail")}</span>
-              <ExternalLink className="h-3.5 w-3.5" />
-            </Button>
-          </Link>
-        ),
+        header: "",
+        cell: () => <ChevronRight className="h-4 w-4 text-[var(--muted-foreground)]" />,
       }),
     ],
     [t]
@@ -187,7 +216,7 @@ export function RankingTab({ jobId }: { jobId: string }) {
   return (
     <div className="space-y-4">
       {/* Summary Counters */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Card>
           <CardContent className="p-3">
             <div className="text-xs text-[var(--muted-foreground)]">
@@ -226,6 +255,14 @@ export function RankingTab({ jobId }: { jobId: string }) {
               {t("job.ranking.summaryManual")}
             </div>
             <div className="text-xl font-bold">{summary.counts.manual_review}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3">
+            <div className="text-xs text-[var(--muted-foreground)]">
+              {t("job.ranking.summaryUnscored")}
+            </div>
+            <div className="text-xl font-bold">{summary.counts.unscored}</div>
           </CardContent>
         </Card>
       </div>
@@ -326,7 +363,15 @@ export function RankingTab({ jobId }: { jobId: string }) {
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
                 {table.getRowModel().rows.map((row) => (
-                  <tr key={row.id} className="hover:bg-[var(--muted)]/30">
+                  <tr
+                    key={row.id}
+                    tabIndex={0}
+                    onClick={() => router.push(`/candidates/${row.original.id}`)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") router.push(`/candidates/${row.original.id}`);
+                    }}
+                    className="cursor-pointer hover:bg-[var(--muted)]/30 focus-visible:bg-[var(--muted)]/40 focus-visible:outline-none"
+                  >
                     {row.getVisibleCells().map((cell) => (
                       <td key={cell.id} className="px-4 py-3">
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}

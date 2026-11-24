@@ -19,9 +19,9 @@ from shortlist.core.evaluate.criteria_generator import (
     detect_discriminatory_reason,
     generate_criteria,
 )
-from shortlist.db.models import Candidate, CriteriaSet, Job, ModelProfile, User
+from shortlist.db.models import AnalysisRun, Candidate, CriteriaSet, Job, ModelProfile, User
 from shortlist.llm.providers import is_external_provider
-from shortlist.schemas.common import JobStatus, ProviderType, UserRole
+from shortlist.schemas.common import JobStatus, ProviderType, RunStatus, UserRole
 from shortlist.schemas.jobs import (
     CriteriaSetResponse,
     CriteriaSetUpdate,
@@ -33,6 +33,7 @@ from shortlist.schemas.jobs import (
 from shortlist.schemas.providers import ModelProfileEntry
 from shortlist.worker.fake_llm import is_fake_llm_enabled
 from shortlist.worker.llm_factory import build_llm_client_for_job
+from shortlist.worker.queue import candidate_analysis_states
 
 router = APIRouter(tags=["jobs"])
 
@@ -261,9 +262,31 @@ def estimate_job_run(
             sends_external = is_external_provider(ProviderType(first_entry.provider))
             provider_label = f"{first_entry.provider.value} ({first_entry.model})"
 
-    # Conservative estimate: ~2500 tokens per CV at ~$0.0005/CV for Flash-tier models, ~2s/CV.
-    estimated_cost = 0.0 if not sends_external else round(candidate_count * 0.0005, 4)
-    estimated_duration = candidate_count * 2
+    cset = db.scalar(
+        select(CriteriaSet)
+        .where(CriteriaSet.job_id == job_id)
+        .order_by(CriteriaSet.version.desc())
+        .limit(1)
+    )
+    states = candidate_analysis_states(db, job_id, cset.version if cset else None)
+    evaluated_count = sum(1 for st, _ in states.values() if st == "done")
+    failed_count = sum(1 for st, _ in states.values() if st == "failed")
+    pending_count = candidate_count - evaluated_count
+    active_run_id = db.scalar(
+        select(AnalysisRun.id)
+        .where(
+            AnalysisRun.job_id == job_id,
+            AnalysisRun.status.in_([RunStatus.PENDING.value, RunStatus.RUNNING.value]),
+        )
+        .order_by(AnalysisRun.created_at.desc())
+        .limit(1)
+    )
+
+    # Conservative estimate for the CVs the next run will actually send:
+    # ~2500 tokens per CV at ~$0.0005/CV for Flash-tier models, ~6s/CV
+    # (LLM latency plus free-tier rate limits).
+    estimated_cost = 0.0 if not sends_external else round(pending_count * 0.0005, 4)
+    estimated_duration = pending_count * 6
 
     return EstimateResponse(
         job_id=job.id,
@@ -273,4 +296,10 @@ def estimate_job_run(
         estimated_duration_seconds=estimated_duration,
         sends_external_data=sends_external,
         provider_label=provider_label,
+        pending_count=pending_count,
+        evaluated_count=evaluated_count,
+        failed_count=failed_count,
+        criteria_count=len(cset.criteria) if cset else 0,
+        criteria_version=cset.version if cset else None,
+        active_run_id=active_run_id,
     )

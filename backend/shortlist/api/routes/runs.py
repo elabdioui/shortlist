@@ -43,7 +43,7 @@ from shortlist.schemas.common import (
 )
 from shortlist.schemas.jobs import CriterionItem
 from shortlist.schemas.runs import AnalysisRunResponse, RunEvent
-from shortlist.worker.queue import enqueue_run_tasks
+from shortlist.worker.queue import candidate_analysis_states, enqueue_run_tasks
 
 router = APIRouter(tags=["runs"])
 
@@ -173,6 +173,20 @@ def start_analysis_run(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Job must have at least one criterion before starting a run.",
         )
+
+    # Idempotent start: a double click or a second tab must not launch a parallel
+    # run that evaluates the same candidates twice and doubles the LLM load.
+    active_run = db.scalar(
+        select(AnalysisRun)
+        .where(
+            AnalysisRun.job_id == job_id,
+            AnalysisRun.status.in_([RunStatus.PENDING.value, RunStatus.RUNNING.value]),
+        )
+        .order_by(AnalysisRun.created_at.desc())
+        .limit(1)
+    )
+    if active_run is not None:
+        return AnalysisRunResponse.model_validate(active_run)
 
     if cset.frozen_at is None:
         cset.frozen_at = _utcnow()
@@ -307,6 +321,7 @@ def get_job_ranking(
     mandatory_ids = [c.id for c in criteria if c.type == CriterionType.MANDATORY]
 
     candidates = db.scalars(select(Candidate).where(Candidate.job_id == job_id)).all()
+    states = candidate_analysis_states(db, job_id, cset.version if cset else None)
     summaries: list[CandidateSummary] = []
 
     for cand in candidates:
@@ -343,6 +358,8 @@ def get_job_ranking(
             mandatory_met = sum(
                 1 for cid in mandatory_ids if verdict_map.get(cid) == CriterionVerdict.YES
             )
+        analysis_status, analysis_error_code = states.get(cand.id, ("not_analyzed", None))
+        eval_version = latest_eval.criteria_set_version if latest_eval else None
 
         summaries.append(
             CandidateSummary(
@@ -357,6 +374,12 @@ def get_job_ranking(
                 mandatory_total=len(mandatory_ids),
                 model_used=latest_eval.model_used if latest_eval else None,
                 fallback_used=latest_eval.fallback_used if latest_eval else False,
+                analysis_status=analysis_status,
+                analysis_error_code=analysis_error_code,
+                criteria_set_version=eval_version,
+                is_stale=(
+                    eval_version is not None and cset is not None and eval_version < cset.version
+                ),
             )
         )
 

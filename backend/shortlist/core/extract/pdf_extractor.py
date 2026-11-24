@@ -65,6 +65,29 @@ def _is_off_page(bbox: tuple[float, float, float, float], width: float, height: 
     return x1 < 0.0 or y1 < 0.0 or x0 > width or y0 > height
 
 
+def _non_white_fill_rects(page: fitz.Page) -> list[fitz.Rect]:
+    """Return bounding rects of filled drawings that are visibly non-white."""
+    rects: list[fitz.Rect] = []
+    for drawing in page.get_drawings():
+        fill = drawing.get("fill")
+        rect = drawing.get("rect")
+        if fill is None or rect is None or len(fill) < 3:
+            continue
+        if any(float(channel) < 0.85 for channel in fill[:3]):
+            rects.append(fitz.Rect(rect))
+    return rects
+
+
+def _has_colored_background(
+    bbox: tuple[float, float, float, float],
+    colored_rects: list[fitz.Rect],
+) -> bool:
+    cx = (bbox[0] + bbox[2]) / 2.0
+    cy = (bbox[1] + bbox[3]) / 2.0
+    point = fitz.Point(cx, cy)
+    return any(rect.contains(point) for rect in colored_rects)
+
+
 def _extract_visible_blocks_and_findings(
     page: fitz.Page,
     page_number: int,
@@ -73,6 +96,7 @@ def _extract_visible_blocks_and_findings(
     page_dict: dict[str, Any] = page.get_text("dict", clip=fitz.INFINITE_RECT())
     width = float(page.rect.width)
     height = float(page.rect.height)
+    colored_rects = _non_white_fill_rects(page)
 
     visible_blocks: list[_TextBlock] = []
     findings: list[HiddenTextFinding] = []
@@ -105,7 +129,7 @@ def _extract_visible_blocks_and_findings(
                 reason: str | None = None
                 if size < MIN_VISIBLE_FONT_SIZE_PT:
                     reason = "font_below_2pt"
-                elif _is_white_color(color):
+                elif _is_white_color(color) and not _has_colored_background(bbox, colored_rects):
                     reason = "white_on_white"
                 elif alpha == 0:
                     reason = "zero_opacity"
@@ -143,47 +167,75 @@ def _extract_visible_blocks_and_findings(
     return visible_blocks, findings
 
 
+def _find_column_gutter(blocks: list[_TextBlock], page_width: float) -> float | None:
+    """Find a vertical gutter separating two text columns, or None for 1-column pages.
+
+    A gutter is an x position that no body block crosses, with a meaningful
+    amount of text on each side. Blocks crossing it are allowed only above the
+    columns (page header such as the candidate name) or below them (footer).
+    Pages laid out as rows (dates on the left, details on the right, with
+    full-width titles between rows) have no such gutter and are read top-down.
+    """
+    text_blocks = [b for b in blocks if len(b.text.strip()) > 2 and (b.x1 - b.x0) > 12.0]
+    if len(text_blocks) < 4:
+        return None
+    total_chars = sum(len(b.text) for b in text_blocks)
+    best: tuple[float, float] | None = None  # (balance, x)
+
+    step = 4.0
+    x = page_width * 0.18
+    while x <= page_width * 0.82:
+        left = [b for b in text_blocks if b.x1 <= x]
+        right = [b for b in text_blocks if b.x0 >= x]
+        crossing = [b for b in text_blocks if b.x0 < x < b.x1]
+        left_chars = sum(len(b.text) for b in left)
+        right_chars = sum(len(b.text) for b in right)
+        if (
+            left
+            and right
+            and left_chars >= 0.12 * total_chars
+            and right_chars >= 0.12 * total_chars
+        ):
+            body_top = min(min(b.y0 for b in left), min(b.y0 for b in right))
+            body_bottom = max(max(b.y1 for b in left), max(b.y1 for b in right))
+            columns_overlap = min(max(b.y1 for b in left), max(b.y1 for b in right)) > max(
+                min(b.y0 for b in left), min(b.y0 for b in right)
+            )
+            if columns_overlap and all(
+                b.y1 <= body_top + 5.0 or b.y0 >= body_bottom - 5.0 for b in crossing
+            ):
+                balance = min(left_chars, right_chars) / max(left_chars, right_chars)
+                if best is None or balance > best[0]:
+                    best = (balance, x)
+        x += step
+    return best[1] if best else None
+
+
 def _order_blocks_reading_order(blocks: list[_TextBlock], page_width: float) -> list[_TextBlock]:
-    """Order blocks for 1-column or 2-column layouts."""
+    """Order blocks for 1-column, 2-column (incl. sidebar), and row-based layouts."""
     if len(blocks) <= 1 or page_width <= 0:
         return sorted(blocks, key=lambda b: (b.y0, b.x0))
 
-    mid_x = page_width / 2.0
-    left_col: list[_TextBlock] = []
-    right_col: list[_TextBlock] = []
-    full_width: list[_TextBlock] = []
-
-    for blk in blocks:
-        if blk.x0 < mid_x * 0.85 and blk.x1 > mid_x * 1.15:
-            full_width.append(blk)
-        elif blk.x1 <= mid_x * 1.08:
-            left_col.append(blk)
-        elif blk.x0 >= mid_x * 0.92:
-            right_col.append(blk)
-        else:
-            full_width.append(blk)
-
-    if not left_col or not right_col:
+    gutter = _find_column_gutter(blocks, page_width)
+    if gutter is None:
         return sorted(blocks, key=lambda b: (b.y0, b.x0))
 
-    left_y_min = min(b.y0 for b in left_col)
-    left_y_max = max(b.y1 for b in left_col)
-    right_y_min = min(b.y0 for b in right_col)
-    right_y_max = max(b.y1 for b in right_col)
-
-    # Confirm vertical overlap between left and right columns.
-    if min(left_y_max, right_y_max) <= max(left_y_min, right_y_min):
-        return sorted(blocks, key=lambda b: (b.y0, b.x0))
-
-    col_top = min(left_y_min, right_y_min)
-    top_full = sorted([b for b in full_width if b.y1 <= col_top + 5.0], key=lambda b: (b.y0, b.x0))
+    left_col = [b for b in blocks if b.x1 <= gutter]
+    right_col = [b for b in blocks if b.x0 >= gutter]
+    crossing = [b for b in blocks if b.x0 < gutter < b.x1]
+    body_top = min(b.y0 for b in [*left_col, *right_col])
+    top_full = sorted([b for b in crossing if b.y0 < body_top + 5.0], key=lambda b: (b.y0, b.x0))
     bottom_full = sorted(
-        [b for b in full_width if b.y1 > col_top + 5.0], key=lambda b: (b.y0, b.x0)
+        [b for b in crossing if b.y0 >= body_top + 5.0], key=lambda b: (b.y0, b.x0)
     )
     left_sorted = sorted(left_col, key=lambda b: (b.y0, b.x0))
     right_sorted = sorted(right_col, key=lambda b: (b.y0, b.x0))
 
-    return [*top_full, *left_sorted, *right_sorted, *bottom_full]
+    # Read left to right, except when the right column clearly starts higher
+    # on the page (a sidebar layout whose main column holds the name/headline).
+    right_first = right_sorted[0].y0 < left_sorted[0].y0 - 20.0
+    columns = [*right_sorted, *left_sorted] if right_first else [*left_sorted, *right_sorted]
+    return [*top_full, *columns, *bottom_full]
 
 
 def _ocr_page(page: fitz.Page) -> str:

@@ -60,6 +60,10 @@ _DISCRIMINATORY_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
 )
 
 
+# Prompt used to generate criteria grids unless overridden.
+DEFAULT_CRITERIA_PROMPT_VERSION = "v2"
+
+
 class _LLMCriteriaPayload(BaseModel):
     criteria: list[CriterionItem]
     rejected_discriminatory: list[str] = Field(default_factory=list)
@@ -71,7 +75,7 @@ class CriteriaGenerationResult(BaseModel):
     criteria: list[CriterionItem]
     rejected_discriminatory: list[str] = Field(default_factory=list)
     model_used: str
-    prompt_version: str = "v1"
+    prompt_version: str = DEFAULT_CRITERIA_PROMPT_VERSION
     input_tokens: int = 0
     output_tokens: int = 0
     cost_usd: float = 0.0
@@ -91,7 +95,7 @@ def generate_criteria(
     client: LLMClient,
     *,
     model: str = "fake-deterministic-v1",
-    prompt_version: str = "v1",
+    prompt_version: str = DEFAULT_CRITERIA_PROMPT_VERSION,
 ) -> CriteriaGenerationResult:
     """Generate 5-12 measurable criteria from a job description at temperature=0."""
     system_prompt = load_prompt("criteria", prompt_version)

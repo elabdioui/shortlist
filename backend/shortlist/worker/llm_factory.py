@@ -74,7 +74,7 @@ def _load_pooled_keys(
                 monthly_budget_usd=key_row.monthly_budget_usd,
                 concurrency=key_row.concurrency,
                 status=KeyStatus(key_row.status),
-                cooldown_until=key_row.cooldown_until,
+                cooldown_until=_as_utc(key_row.cooldown_until),
                 monthly_spend_usd=_current_month_spend(db, key_row.id, now),
             )
         )
@@ -111,13 +111,23 @@ def refresh_key_pool_from_db(
     pool.refresh_keys(pooled_keys)
 
 
+def _as_utc(value: datetime | None) -> datetime | None:
+    """SQLite returns naive datetimes: tag them as UTC so they compare with utcnow()."""
+    if value is None or value.tzinfo is not None:
+        return value
+    return value.replace(tzinfo=UTC)
+
+
 def sync_pool_states_to_db(db: Session, pool: KeyPool) -> None:
     """Persist any cooldown or invalidation updates from KeyPool back to APIKey rows."""
     for pooled in pool.list_keys():
         key_row = db.get(APIKey, pooled.id)
         if key_row is None:
             continue
-        if key_row.status != pooled.status.value or key_row.cooldown_until != pooled.cooldown_until:
+        if (
+            key_row.status != pooled.status.value
+            or _as_utc(key_row.cooldown_until) != pooled.cooldown_until
+        ):
             key_row.status = pooled.status.value
             key_row.cooldown_until = pooled.cooldown_until
 

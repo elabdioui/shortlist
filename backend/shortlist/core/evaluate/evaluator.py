@@ -21,6 +21,9 @@ CV_START_DELIMITER = "<<<UNTRUSTED_CV_START>>>"
 CV_END_DELIMITER = "<<<UNTRUSTED_CV_END>>>"
 
 _PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
+
+# Prompt used for CV evaluation by the worker and CLI unless overridden.
+DEFAULT_EVAL_PROMPT_VERSION = "v3"
 _CODE_FENCE_RE = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL | re.IGNORECASE)
 
 
@@ -60,7 +63,7 @@ def build_evaluation_messages(
     job_description: str,
     criteria: Sequence[CriterionItem],
     *,
-    prompt_version: str = "v1",
+    prompt_version: str = DEFAULT_EVAL_PROMPT_VERSION,
 ) -> list[LLMMessage]:
     """Build system and user messages with untrusted-data CV delimiters."""
     system_prompt = load_prompt("evaluate", prompt_version)
@@ -96,7 +99,7 @@ def evaluate_cv(
     client: LLMClient,
     *,
     model: str = "fake-deterministic-v1",
-    prompt_version: str = "v1",
+    prompt_version: str = DEFAULT_EVAL_PROMPT_VERSION,
 ) -> EvaluationCallResult:
     """Evaluate an anonymized CV against criteria at temperature=0 with 1 JSON retry."""
     messages = build_evaluation_messages(

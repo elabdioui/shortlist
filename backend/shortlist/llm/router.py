@@ -21,6 +21,9 @@ from shortlist.schemas.common import ProviderType, RoutingStrategy
 from shortlist.schemas.providers import APIKeyTestResult, ModelProfileEntry
 
 MAX_TRANSIENT_RETRIES = 2
+# How long a request waits for a busy concurrency slot before falling back.
+MAX_SLOT_WAIT_SECONDS = 45.0
+SLOT_POLL_SECONDS = 0.5
 
 _DEFAULT_TEST_MODELS: dict[ProviderType, str] = {
     ProviderType.OLLAMA: "llama3.2",
@@ -45,10 +48,19 @@ class BudgetExceededError(RuntimeError):
 class AllKeysExhaustedError(RuntimeError):
     """Raised when every key and fallback model in the profile failed or is unavailable."""
 
-    def __init__(self, attempts: list[str]) -> None:
+    def __init__(self, attempts: list[str], retry_after_seconds: float | None = None) -> None:
         self.attempts = attempts
+        # Seconds after which retrying is likely to succeed (rate limits, 5xx,
+        # busy keys). None means the failure is permanent (invalid keys,
+        # daily quota, unsupported model) and retrying will not help.
+        self.retry_after_seconds = retry_after_seconds
         summary = "; ".join(attempts) if attempts else "No eligible keys in pool."
         super().__init__(f"All keys and fallback models exhausted: {summary}")
+
+    @property
+    def retryable(self) -> bool:
+        """True if the exhaustion is temporary and the request may be retried later."""
+        return self.retry_after_seconds is not None
 
 
 class RoutedLLMResponse(LLMResponse):
@@ -139,6 +151,7 @@ class LLMRouter:
         unit_cost_fn: UnitCostFn | None = None,
         sleep_fn: Callable[[float], None] = time.sleep,
         request_timeout_seconds: float = 60.0,
+        max_slot_wait_seconds: float = MAX_SLOT_WAIT_SECONDS,
     ) -> None:
         self._pool = pool
         self._profile = profile
@@ -149,6 +162,7 @@ class LLMRouter:
         self._unit_cost_fn = unit_cost_fn or _default_unit_cost
         self._sleep_fn = sleep_fn
         self._timeout = request_timeout_seconds
+        self._max_slot_wait = max_slot_wait_seconds
 
     @property
     def job_budget_remaining_usd(self) -> float | None:
@@ -163,6 +177,7 @@ class LLMRouter:
         """Execute a completion across the profile's fallback chain and key pool."""
         estimated_tokens = sum(max(1, len(m.content) // 4) for m in request.messages)
         attempts: list[str] = []
+        retry_hints: list[float] = []
         total_attempts = 0
 
         for step_idx, step in enumerate(self._profile):
@@ -179,6 +194,10 @@ class LLMRouter:
                     f"estimated=${estimated_cost:.4f})."
                 )
 
+            # Other worker threads may hold every concurrency slot of this
+            # step's keys. Wait briefly for a slot instead of skipping straight
+            # to a fallback model (or failing the whole task).
+            waited = 0.0
             candidates = self._pool.select_candidates(
                 step.provider,
                 step.model,
@@ -186,8 +205,25 @@ class LLMRouter:
                 estimated_tokens=estimated_tokens,
                 cost_fn=self._unit_cost_fn,
             )
+            while (
+                not candidates
+                and waited < self._max_slot_wait
+                and self._pool.is_slot_contended(step.provider, step.model)
+            ):
+                self._sleep_fn(SLOT_POLL_SECONDS)
+                waited += SLOT_POLL_SECONDS
+                candidates = self._pool.select_candidates(
+                    step.provider,
+                    step.model,
+                    strategy=self._strategy,
+                    estimated_tokens=estimated_tokens,
+                    cost_fn=self._unit_cost_fn,
+                )
             if not candidates:
                 attempts.append(f"{step.provider.value}/{step.model}: no eligible keys")
+                hint = self._pool.retry_hint_seconds(step.provider, step.model, estimated_tokens)
+                if hint is not None:
+                    retry_hints.append(hint)
                 continue
 
             litellm_model = format_litellm_model(step.provider, step.model)
@@ -245,19 +281,29 @@ class LLMRouter:
                         )
                         if category == "rate_limit":
                             retry_after = extract_retry_after_seconds(exc)
-                            self._pool.mark_cooldown(key.id, retry_after)
+                            until = self._pool.mark_cooldown(key.id, retry_after)
+                            retry_hints.append(max(1.0, (until - self._pool_now()).total_seconds()))
                             break
                         if category == "auth":
                             self._pool.mark_invalid(key.id)
                             break
-                        if category == "transient" and retry_idx < MAX_TRANSIENT_RETRIES:
-                            self._sleep_fn(min(2.0**retry_idx, 4.0))
-                            continue
+                        if category == "transient":
+                            if retry_idx < MAX_TRANSIENT_RETRIES:
+                                self._sleep_fn(min(2.0**retry_idx, 4.0))
+                                continue
+                            # Provider overloaded (5xx/timeout): worth retrying later.
+                            retry_hints.append(30.0)
                         break
                     finally:
                         self._pool.release(key.id, total_tokens=call_tokens, cost_usd=call_cost)
 
-        raise AllKeysExhaustedError(attempts)
+        raise AllKeysExhaustedError(
+            attempts,
+            retry_after_seconds=min(retry_hints) if retry_hints else None,
+        )
+
+    def _pool_now(self) -> Any:
+        return self._pool.now()
 
 
 def check_api_key(

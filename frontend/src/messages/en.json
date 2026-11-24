@@ -12,7 +12,7 @@
     "add": "Add",
     "close": "Close",
     "back": "Back",
-    "search": "Search...",
+    "search": "Search",
     "actions": "Actions",
     "status": "Status",
     "errorGeneric": "Something went wrong. Please try again.",
@@ -76,9 +76,9 @@
   "job": {
     "backToDashboard": "Back to jobs",
     "tabs": {
-      "criteria": "1. Criteria Grid",
-      "upload": "2. Upload CVs & Run",
-      "ranking": "3. Ranking"
+      "criteria": "Criteria",
+      "upload": "CVs",
+      "ranking": "Ranking"
     },
     "criteria": {
       "jobDetails": "Job settings",
@@ -102,7 +102,16 @@
       "mandatory": "Mandatory",
       "bonus": "Bonus",
       "weight": "Weight (1 to 5)",
-      "savedSuccess": "Criteria grid saved successfully."
+      "savedSuccess": "Criteria grid saved successfully.",
+      "unsaved": "Unsaved changes",
+      "regenerateConfirm": "Replace the current grid with a new AI proposal? Unsaved changes will be lost.",
+      "newVersionNotice": "This grid was already used to analyse CVs. Saving creates version v{next}, and CVs will need to be re-analysed.",
+      "settingsTitle": "Advanced settings",
+      "settingsHint": "AI profile, budget and recommendation thresholds.",
+      "settingsSaved": "Settings saved.",
+      "nextStep": "Next step: upload CVs",
+      "thresholdsHelp": "Interview: score ≥ interview threshold and every mandatory criterion met. Not retained: score < review threshold or a mandatory criterion explicitly contradicted. Otherwise: review.",
+      "discard": "Discard changes"
     },
     "upload": {
       "dropzoneTitle": "Drag and drop CVs here",
@@ -125,7 +134,8 @@
       "cumulativeCost": "Cumulative cost: {cost}",
       "runCompleted": "Screening completed! Open the Ranking tab.",
       "runPausedBudget": "Screening paused: maximum budget reached.",
-      "runFailed": "Screening encountered an error."
+      "runFailed": "Screening encountered an error.",
+      "uploadedHint": "CVs added. Start the analysis from the banner at the top of the page."
     },
     "ranking": {
       "summaryTotal": "Total",
@@ -149,7 +159,57 @@
       "colOpen": "Detail",
       "openDetail": "Open detail",
       "fallbackBadge": "Fallback",
-      "emptyRanking": "No ranked CVs yet. Upload CVs and start screening."
+      "emptyRanking": "No ranked CVs yet. Upload CVs and start screening.",
+      "colStatus": "Status",
+      "status": {
+        "done": "Analysed",
+        "queued": "Queued",
+        "running": "Analysing",
+        "failed": "Failed",
+        "not_analyzed": "Not analysed"
+      },
+      "staleBadge": "Grid changed",
+      "staleHint": "Score computed with grid v{version}. Re-run the analysis to update it.",
+      "summaryUnscored": "No score",
+      "errors": {
+        "rate_limit": "AI provider quota or rate limit reached.",
+        "overloaded": "AI provider temporarily overloaded.",
+        "timeout": "The AI provider did not answer in time.",
+        "auth": "API key rejected by the provider (invalid or revoked).",
+        "no_keys": "No usable API key (daily quota, budget or model not allowed).",
+        "all_failed": "All configured models failed.",
+        "unknown": "Unexpected error while analysing this CV."
+      }
+    },
+    "thresholds": "Thresholds: interview ≥ {interview} · review ≥ {review}",
+    "steps": {
+      "criteriaTodo": "To define",
+      "criteriaDone": "{count} criteria · v{version}",
+      "uploadTodo": "No CV uploaded",
+      "uploadDone": "{count} CV(s) uploaded",
+      "rankingTodo": "Not analysed yet",
+      "rankingRunning": "Analysis running…",
+      "rankingDone": "{evaluated}/{total} analysed",
+      "rankingFailed": "{count} failed"
+    },
+    "run": {
+      "needCriteria": "Step 1: define the criteria grid before analysing CVs.",
+      "goCriteria": "Define criteria",
+      "needCvs": "Step 2: upload the candidates' CVs.",
+      "goUpload": "Upload CVs",
+      "readyTitle": "{count} CV(s) to analyse",
+      "retryTitle": "{count} CV(s) to analyse, including {failed} that failed last time",
+      "readyDetail": "Estimated duration {duration} · estimated cost {cost}",
+      "allDone": "All CVs are analysed with grid v{version}.",
+      "start": "Start analysis",
+      "retry": "Retry analysis",
+      "starting": "Starting…",
+      "runningTitle": "Analysis running: {processed}/{total} CVs",
+      "runningHint": "You can switch tabs or close the page, the analysis keeps running in the background. Temporary provider errors (quota, overload) are retried automatically.",
+      "finishedOk": "Analysis finished: {count} CV(s) evaluated.",
+      "finishedWithFailures": "Analysis finished, but {failed} CV(s) could not be evaluated (see the Status column of the ranking).",
+      "pausedBudget": "Analysis paused: the job's maximum budget was reached. Raise it in the advanced settings of the Criteria tab, then retry.",
+      "viewRanking": "View ranking"
     }
   },
   "recommendations": {
@@ -198,7 +258,23 @@
     "saveDecision": "Save decision",
     "decisionSaved": "Decision saved.",
     "deleteCandidate": "Erase candidate",
-    "deleteCandidateConfirm": "Permanently delete this candidate and their CV (right to erasure)?"
+    "deleteCandidateConfirm": "Permanently delete this candidate and their CV (right to erasure)?",
+    "whyTitle": "Why this recommendation?",
+    "why": {
+      "mandatoryNo": "Mandatory criterion contradicted by the CV: {label}",
+      "belowReview": "Score {score} below the review threshold ({threshold})",
+      "mandatoryIncomplete": "Mandatory criterion not demonstrated: {label}",
+      "belowInterview": "Score {score} below the interview threshold ({threshold})",
+      "allGood": "Score ≥ {threshold} and every mandatory criterion met",
+      "manual": "Manual reading required: extraction failed, hidden text detected or invalid AI answer."
+    },
+    "unsavedOverrides": "Unsaved corrections",
+    "saveOverrides": "Save",
+    "prevCandidate": "Previous",
+    "nextCandidate": "Next",
+    "positionOf": "{index} / {total}",
+    "decisionSavedShort": "Decision saved",
+    "noEvaluationHint": "Go back to the job to start or retry the analysis."
   },
   "providers": {
     "title": "AI Providers & AI Keys",

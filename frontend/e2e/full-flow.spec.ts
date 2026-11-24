@@ -37,7 +37,9 @@ test("full recruitment screening flow with SHORTLIST_FAKE_LLM=1", async ({ page 
   await page.getByLabel("Intitulé du poste").fill("Acheteur Supply Chain Senior");
   await page
     .getByLabel("Fiche de poste")
-    .fill("Nous recherchons un Acheteur Supply Chain avec 5 ans d'expérience et maîtrise de l'anglais.");
+    .fill(
+      "Nous recherchons un Acheteur Supply Chain avec 5 ans d'expérience et maîtrise de l'anglais."
+    );
   await page.getByRole("button", { name: "Créer l'offre" }).click();
 
   await page.waitForURL("**/jobs/**");
@@ -45,12 +47,14 @@ test("full recruitment screening flow with SHORTLIST_FAKE_LLM=1", async ({ page 
 
   // 4. Generate & save criteria
   await page.getByRole("button", { name: "Générer les critères avec l'IA" }).click();
-  await expect(page.getByRole("button", { name: "Valider et enregistrer la grille" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Valider et enregistrer la grille" })
+  ).toBeVisible();
   await page.getByRole("button", { name: "Valider et enregistrer la grille" }).click();
   await expect(page.getByText("Grille enregistrée avec succès.")).toBeVisible();
 
   // 5. Upload CV & run screening
-  await page.getByRole("tab", { name: /2\. Import des CV/ }).click();
+  await page.getByRole("tab", { name: /^2\s*CV/ }).click();
   const fileInput = page.locator('input[type="file"]');
   await fileInput.setInputFiles({
     name: "jean_dupont_cv.txt",
@@ -58,19 +62,20 @@ test("full recruitment screening flow with SHORTLIST_FAKE_LLM=1", async ({ page 
     buffer: Buffer.from(SAMPLE_CV, "utf-8"),
   });
 
-  await expect(page.getByText(/1 CV importé/)).toBeVisible();
+  await expect(page.getByText(/1 CV importé/).first()).toBeVisible();
   await page.getByRole("button", { name: "Lancer l'analyse" }).click();
 
   // Wait for SSE completion and auto-switch to Ranking tab
-  await expect(page.getByRole("tab", { name: /3\. Classement/ })).toHaveAttribute(
+  await expect(page.getByRole("tab", { name: /Classement/ })).toHaveAttribute(
     "aria-selected",
     "true",
-    { timeout: 30_000 },
+    { timeout: 30_000 }
   );
 
   // 6. Verify Ranking Table & open Candidate Detail
   await expect(page.getByText("jean_dupont_cv.txt")).toBeVisible();
-  await page.getByRole("button", { name: "Ouvrir la fiche" }).first().click();
+  // Rows are clickable: open the candidate detail from its row.
+  await page.getByText("jean_dupont_cv.txt").first().click();
 
   await page.waitForURL("**/candidates/**");
   await expect(page.getByRole("heading", { name: "jean_dupont_cv.txt" })).toBeVisible();

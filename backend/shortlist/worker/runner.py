@@ -116,16 +116,21 @@ class WorkerRunner:
         return recovered
 
     def _execute_task(self, task_id: str) -> None:
-        shared_pool = self._get_or_refresh_pool()
-        with self.session_factory() as db:
-            _run_with_sqlite_retry(
-                process_task,
-                db,
-                task_id,
-                secret_key=self.secret_key,
-                force_fake_llm=self.force_fake_llm,
-                shared_pool=shared_pool,
-            )
+        # One broken task must never take the whole worker process down: its
+        # lease expires and recover_stale() puts it back in the queue.
+        try:
+            shared_pool = self._get_or_refresh_pool()
+            with self.session_factory() as db:
+                _run_with_sqlite_retry(
+                    process_task,
+                    db,
+                    task_id,
+                    secret_key=self.secret_key,
+                    force_fake_llm=self.force_fake_llm,
+                    shared_pool=shared_pool,
+                )
+        except Exception:
+            logger.exception("Unhandled error while processing task %s", task_id)
 
     def _claim_one(self) -> str | None:
         with self.session_factory() as db:
