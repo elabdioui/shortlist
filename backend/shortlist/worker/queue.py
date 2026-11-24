@@ -287,12 +287,20 @@ def process_task(
         db.commit()
         return
 
-    criteria_set = db.scalar(
-        select(CriteriaSet)
-        .where(CriteriaSet.job_id == job.id)
-        .order_by(CriteriaSet.version.desc())
-        .limit(1)
-    )
+    if run.criteria_set_version is not None:
+        criteria_set = db.scalar(
+            select(CriteriaSet).where(
+                CriteriaSet.job_id == job.id,
+                CriteriaSet.version == run.criteria_set_version,
+            )
+        )
+    else:
+        criteria_set = db.scalar(
+            select(CriteriaSet)
+            .where(CriteriaSet.job_id == job.id)
+            .order_by(CriteriaSet.version.desc())
+            .limit(1)
+        )
     if criteria_set is None:
         task.status = "failed"
         task.last_error = "Job has no criteria set."
