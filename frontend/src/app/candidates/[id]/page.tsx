@@ -3,7 +3,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ArrowLeft, CheckCircle2, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, RotateCcw, Trash2 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -163,6 +163,19 @@ export default function CandidateDetailPage() {
     },
   });
 
+  const reanalyzeMutation = useMutation({
+    mutationFn: () => jobsApi.startRun(jobId!, { resume_failed: false }),
+    onSuccess: () => {
+      if (jobId) {
+        queryClient.invalidateQueries({ queryKey: ["job", jobId] });
+        router.push(`/jobs/${jobId}?tab=upload`);
+      }
+    },
+    onError: (err) => {
+      setError(err instanceof ApiError ? err.detail : t("common.errorGeneric"));
+    },
+  });
+
   function handleSubmitDecision(e: FormEvent) {
     e.preventDefault();
     setSavedBanner(false);
@@ -243,6 +256,35 @@ export default function CandidateDetailPage() {
                 </Alert>
               )}
 
+              {/* Newer Grid Warning */}
+              {evaluation &&
+                criteriaQuery.data &&
+                criteriaQuery.data.version > evaluation.criteria_set_version && (
+                  <Alert
+                    variant="warning"
+                    className="flex flex-wrap items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 shrink-0" />
+                      <span>
+                        {t("candidate.newerGridWarning", {
+                          latest: criteriaQuery.data.version,
+                          used: evaluation.criteria_set_version,
+                        })}
+                      </span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => reanalyzeMutation.mutate()}
+                      disabled={reanalyzeMutation.isPending || !jobId}
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      <span>{t("candidate.reanalyzeNewGrid")}</span>
+                    </Button>
+                  </Alert>
+                )}
+
               {/* Score Card */}
               <Card>
                 <CardContent className="flex flex-wrap items-center justify-between gap-4 p-5">
@@ -260,7 +302,8 @@ export default function CandidateDetailPage() {
                     {evaluation && (
                       <div className="mt-1 text-xs text-[var(--muted-foreground)]">
                         {t("candidate.scoreOriginal", { score: Math.round(evaluation.score) })} ·{" "}
-                        {t("candidate.formulaVersion", { version: evaluation.formula_version })}
+                        {t("candidate.formulaVersion", { version: evaluation.formula_version })} ·{" "}
+                        {t("candidate.gridVersion", { version: evaluation.criteria_set_version })}
                       </div>
                     )}
                   </div>
