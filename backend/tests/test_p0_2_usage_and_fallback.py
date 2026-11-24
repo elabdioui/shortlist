@@ -152,7 +152,9 @@ def test_key_failover_usage_log_and_budget_skip(
 
     def fake_completion(**kwargs: Any) -> dict[str, Any]:
         if kwargs.get("api_key") == "sk-key-a-secret":
-            raise RuntimeError("429 Too Many Requests")
+            exc = RuntimeError("429 Too Many Requests")
+            exc.status_code = 429  # type: ignore[attr-defined]
+            raise exc
         payload = {
             "criteria": [
                 {

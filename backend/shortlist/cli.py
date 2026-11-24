@@ -48,6 +48,14 @@ def version() -> None:
     typer.echo(f"shortlist {__version__}")
 
 
+@app.command(name="gen-secret")
+def gen_secret() -> None:
+    """Generate a new Fernet secret key for SHORTLIST_SECRET_KEY."""
+    from cryptography.fernet import Fernet
+
+    typer.echo(Fernet.generate_key().decode("ascii"))
+
+
 @app.command()
 def screen(
     cv_dir: Path = typer.Argument(..., exists=True, file_okay=False, help="Directory of CV files."),

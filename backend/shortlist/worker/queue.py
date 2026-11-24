@@ -388,10 +388,10 @@ def process_task(
             if pool is not None:
                 sync_pool_states_to_db(db, pool)
 
-            fallback_used = False
-            api_key_id: str | None = None
-            if isinstance(client, LLMRouter) and eval_res.model_used != primary_model:
-                fallback_used = True
+            api_key_id = eval_res.key_id
+            fallback_used = eval_res.fallback_used or (
+                isinstance(client, LLMRouter) and eval_res.model_used != primary_model
+            )
 
             if eval_res.invalid_json or eval_res.output is None:
                 scoring = score_candidate(

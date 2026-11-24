@@ -10,6 +10,7 @@ import signal
 import threading
 from types import FrameType
 
+from shortlist.api.startup import validate_startup_requirements
 from shortlist.config import get_settings
 from shortlist.db.session import get_session_factory
 from shortlist.worker.runner import WorkerRunner
@@ -23,6 +24,7 @@ def main() -> None:
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
     settings = get_settings()
+    validate_startup_requirements(settings)
     stop_event = threading.Event()
 
     def _handle_signal(_signum: int, _frame: FrameType | None) -> None:

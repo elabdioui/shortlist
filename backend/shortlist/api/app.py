@@ -5,12 +5,16 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, sessionmaker
 
 from shortlist.api.rate_limit import LoginRateLimiter
 from shortlist.api.routes import auth, candidates, jobs, privacy, providers, runs
+from shortlist.api.startup import validate_startup_requirements
 from shortlist.config import Settings, get_settings
 from shortlist.schemas.common import HealthResponse
 
@@ -22,6 +26,12 @@ def create_app(
 ) -> FastAPI:
     """Create and configure the Shortlist FastAPI application."""
     settings = settings_override or get_settings()
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        validate_startup_requirements(settings)
+        yield
+
     application = FastAPI(
         title=settings.app_name,
         version=settings.version,
@@ -30,6 +40,7 @@ def create_app(
         openapi_url="/api/openapi.json",
         docs_url="/api/docs",
         redoc_url="/api/redoc",
+        lifespan=lifespan,
     )
 
     application.state.settings = settings
