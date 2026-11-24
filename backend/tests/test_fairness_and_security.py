@@ -201,11 +201,13 @@ def test_hidden_text_and_zip_bomb_security_guards() -> None:
 
 def test_api_auth_csrf_and_secret_masking(tmp_path: Path) -> None:
     """API enforces auth, CSRF on mutating requests, and masks API key secrets."""
+    from cryptography.fernet import Fernet
+
     db_path = tmp_path / "sec_test.db"
     settings = Settings(
         data_dir=tmp_path,
         database_url=f"sqlite:///{db_path}",
-        secret_key="test-secret-key-for-security-suite",
+        secret_key=Fernet.generate_key().decode("ascii"),
     )
     engine = create_db_engine(settings.database_url)
     Base.metadata.create_all(bind=engine)
