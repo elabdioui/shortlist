@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 from dataclasses import dataclass
 from functools import lru_cache
@@ -20,6 +21,36 @@ from shortlist.core.anonymize.recognizers import build_custom_recognizers
 
 logger = logging.getLogger(__name__)
 
+
+class MissingNLPModelError(RuntimeError):
+    """Raised when required spaCy NER models are not installed."""
+
+
+def ensure_nlp_models_available(*, allow_blank_nlp: bool | None = None) -> tuple[bool, bool]:
+    """Verify fr_core_news_md and en_core_web_md are installed unless blank fallback is allowed."""
+    fr_available = spacy.util.is_package("fr_core_news_md")
+    en_available = spacy.util.is_package("en_core_web_md")
+    if fr_available and en_available:
+        return True, True
+
+    allow_blank = (
+        allow_blank_nlp
+        if allow_blank_nlp is not None
+        else os.environ.get("SHORTLIST_ALLOW_BLANK_NLP") == "1"
+    )
+    if not allow_blank:
+        missing = [
+            name
+            for name, ok in (("fr_core_news_md", fr_available), ("en_core_web_md", en_available))
+            if not ok
+        ]
+        raise MissingNLPModelError(
+            f"Missing required spaCy NER models: {', '.join(missing)}. "
+            "Install the models or set SHORTLIST_ALLOW_BLANK_NLP=1 for dev/testing."
+        )
+    return fr_available, en_available
+
+
 _ENTITY_PLACEHOLDER_PREFIX: dict[str, str] = {
     "PERSON": "PERSON",
     "EMAIL_ADDRESS": "EMAIL",
@@ -28,7 +59,8 @@ _ENTITY_PLACEHOLDER_PREFIX: dict[str, str] = {
     "PROFILE_URL": "URL",
     "STREET_ADDRESS": "ADDRESS",
     "AGE_OR_DOB": "AGE_DOB",
-    "MARITAL_STATUS": "MARITAL_STATUS",
+    "FAMILY_STATUS": "FAMILY_STATUS",
+    "MARITAL_STATUS": "FAMILY_STATUS",
     "NATIONALITY": "NATIONALITY",
 }
 
@@ -68,12 +100,44 @@ _NON_NAME_HEADER_WORDS = frozenset(
         "chain",
         "logistics",
         "logistique",
+        "senior",
+        "junior",
+        "devops",
+        "backend",
+        "frontend",
+        "fullstack",
+        "python",
+        "data",
+        "lead",
+        "chef",
+        "projet",
+        "responsable",
+        "consultant",
+        "analyst",
+        "analyste",
+    }
+)
+
+_GENERIC_EMAIL_TOKENS = frozenset(
+    {
+        "info",
+        "contact",
+        "admin",
+        "support",
+        "hello",
+        "jobs",
+        "resume",
+        "mail",
+        "noreply",
+        "recrutement",
     }
 )
 
 _HEADER_NAME_RE = re.compile(
-    r"^[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'-]{1,25}(?:\s+[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'-]{1,25}){1,2}$"
+    r"^[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'-]{1,25}"
+    r"(?:\s+(?:[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'-]{1,25}|de|du|la|el|al|ben|bint|ibn|van|von)){1,3}$"
 )
+_EMAIL_LOCAL_RE = re.compile(r"\b([A-Za-z0-9._%+-]+)@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,26 +221,39 @@ def _build_analyzer_engine() -> tuple[AnalyzerEngine, bool]:
     return engine, ner_loaded
 
 
-def _detect_header_name_span(text: str) -> RecognizerResult | None:
-    """Detect a candidate name on the first non-empty line when NER models are absent."""
-    offset = 0
-    for line in text.splitlines(keepends=True):
+def _detect_header_names(text: str) -> list[str]:
+    """Detect 2-4 token capitalized candidate names in the first 8 non-empty lines."""
+    detected: list[str] = []
+    non_empty_seen = 0
+    for line in text.splitlines():
         stripped = line.strip()
         if not stripped:
-            offset += len(line)
+            continue
+        non_empty_seen += 1
+        if non_empty_seen > 8:
+            break
+        if ":" in stripped or "|" in stripped or any(ch.isdigit() for ch in stripped):
             continue
         if _HEADER_NAME_RE.match(stripped):
             words = {w.lower() for w in stripped.split()}
             if not words.intersection(_NON_NAME_HEADER_WORDS):
-                start = offset + line.index(stripped)
-                return RecognizerResult(
-                    entity_type="PERSON",
-                    start=start,
-                    end=start + len(stripped),
-                    score=0.80,
-                )
-        break
-    return None
+                detected.append(stripped)
+    return detected
+
+
+def _extract_email_derived_names(text: str) -> list[str]:
+    """Derive candidate name phrases/tokens from email local parts (e.g. nadia.elfassi@...)."""
+    derived: list[str] = []
+    for match in _EMAIL_LOCAL_RE.finditer(text):
+        local = match.group(1)
+        parts = [
+            p
+            for p in re.split(r"[._-]+", local)
+            if len(p) >= 3 and p.isalpha() and p.lower() not in _GENERIC_EMAIL_TOKENS
+        ]
+        if len(parts) >= 2:
+            derived.append(r"\s+".join(re.escape(p) for p in parts))
+    return derived
 
 
 def _resolve_overlaps(results: list[RecognizerResult]) -> list[RecognizerResult]:
@@ -226,9 +303,28 @@ def anonymize_text(
         )
     )
 
-    header_span = _detect_header_name_span(text)
-    if header_span is not None:
-        results.append(header_span)
+    header_names = _detect_header_names(text)
+    for name in header_names:
+        for match in re.finditer(rf"\b{re.escape(name)}\b", text):
+            results.append(
+                RecognizerResult(
+                    entity_type="PERSON",
+                    start=match.start(),
+                    end=match.end(),
+                    score=0.90,
+                )
+            )
+
+    for pattern in _extract_email_derived_names(text):
+        for match in re.finditer(rf"\b{pattern}\b", text, re.IGNORECASE):
+            results.append(
+                RecognizerResult(
+                    entity_type="PERSON",
+                    start=match.start(),
+                    end=match.end(),
+                    score=0.90,
+                )
+            )
 
     if extra_names:
         for name in extra_names:
