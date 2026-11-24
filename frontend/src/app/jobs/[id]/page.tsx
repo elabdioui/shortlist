@@ -3,7 +3,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ListChecks, Trophy, UploadCloud } from "lucide-react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -14,8 +14,9 @@ import { UploadAndRunTab } from "@/components/jobs/UploadAndRunTab";
 import { AppShell } from "@/components/layout/AppShell";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { jobsApi } from "@/lib/api/client";
-import { cn } from "@/lib/utils";
 
 type JobTab = "criteria" | "upload" | "ranking";
 
@@ -36,60 +37,64 @@ export default function JobDetailPage() {
   return (
     <AppShell>
       <div className="space-y-6">
-        <div>
+        <div className="flex flex-col gap-2">
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+            className="inline-flex w-fit items-center gap-1.5 text-xs font-medium text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="h-3.5 w-3.5" />
             <span>{t("job.backToDashboard")}</span>
           </Link>
 
           {jobQuery.data && (
-            <div className="mt-2 flex flex-wrap items-center gap-3">
-              <h1 className="text-2xl font-bold tracking-tight">{jobQuery.data.title}</h1>
-              <Badge variant="info">{t(`jobStatus.${jobQuery.data.status}`)}</Badge>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="text-2xl font-semibold tracking-tight">{jobQuery.data.title}</h1>
+                <Badge variant="default">{t(`jobStatus.${jobQuery.data.status}`)}</Badge>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
+                <Badge variant="outline" className="font-mono">
+                  {jobQuery.data.interview_threshold}/{jobQuery.data.review_threshold}
+                </Badge>
+              </div>
             </div>
           )}
         </div>
 
         {jobQuery.isLoading ? (
-          <div className="py-12 text-center text-sm text-[var(--muted-foreground)]">
-            {t("common.loading")}
+          <div className="space-y-4">
+            <Skeleton className="h-10 w-80" />
+            <Skeleton className="h-64 w-full rounded-xl" />
           </div>
         ) : jobQuery.isError || !jobQuery.data ? (
           <Alert variant="danger">{t("common.errorGeneric")}</Alert>
         ) : (
-          <>
-            <div
-              role="tablist"
-              className="flex flex-wrap gap-2 border-b border-[var(--border)] pb-2"
-            >
-              {(["criteria", "upload", "ranking"] as const).map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTab === tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={cn(
-                    "rounded-lg px-4 py-2 text-sm font-medium transition-colors cursor-pointer",
-                    activeTab === tab
-                      ? "bg-[var(--primary)] text-[var(--primary-foreground)]"
-                      : "text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
-                  )}
-                >
-                  {t(`job.tabs.${tab}`)}
-                </button>
-              ))}
-            </div>
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as JobTab)}>
+            <TabsList>
+              <TabsTrigger value="criteria">
+                <ListChecks className="h-4 w-4" />
+                <span>{t("job.tabs.criteria")}</span>
+              </TabsTrigger>
+              <TabsTrigger value="upload">
+                <UploadCloud className="h-4 w-4" />
+                <span>{t("job.tabs.upload")}</span>
+              </TabsTrigger>
+              <TabsTrigger value="ranking">
+                <Trophy className="h-4 w-4" />
+                <span>{t("job.tabs.ranking")}</span>
+              </TabsTrigger>
+            </TabsList>
 
-            {activeTab === "criteria" && <CriteriaEditorTab job={jobQuery.data} />}
-            {activeTab === "upload" && (
+            <TabsContent value="criteria">
+              <CriteriaEditorTab job={jobQuery.data} />
+            </TabsContent>
+            <TabsContent value="upload">
               <UploadAndRunTab job={jobQuery.data} onRunFinished={() => setActiveTab("ranking")} />
-            )}
-            {activeTab === "ranking" && <RankingTab jobId={jobQuery.data.id} />}
-          </>
+            </TabsContent>
+            <TabsContent value="ranking">
+              <RankingTab jobId={jobQuery.data.id} />
+            </TabsContent>
+          </Tabs>
         )}
       </div>
     </AppShell>

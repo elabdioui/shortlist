@@ -10,7 +10,6 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from shortlist.api.crypto import decrypt_secret
 from shortlist.db.models import APIKey, Job, ModelProfile, Provider, UsageLog
 from shortlist.llm.client import LLMClient
 from shortlist.llm.pool import KeyPool, PooledKey
@@ -33,6 +32,8 @@ def _current_month_spend(db: Session, api_key_id: str) -> float:
 
 def build_key_pool_from_db(db: Session, secret_key: str) -> KeyPool:
     """Load active providers and encrypted API keys from the database into a KeyPool."""
+    from shortlist.api.crypto import decrypt_secret
+
     rows = db.execute(
         select(APIKey, Provider)
         .join(Provider, APIKey.provider_id == Provider.id)

@@ -4,6 +4,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
+import { Toaster } from "sonner";
 import {
   createContext,
   useCallback,
@@ -111,6 +112,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       <AppPreferencesContext.Provider value={prefValue}>
         <NextIntlClientProvider locale={locale} messages={MESSAGES[locale]} timeZone="UTC">
           {children}
+          <Toaster richColors position="bottom-right" theme={theme} />
         </NextIntlClientProvider>
       </AppPreferencesContext.Provider>
     </QueryClientProvider>
