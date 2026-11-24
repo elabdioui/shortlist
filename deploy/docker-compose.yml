@@ -10,7 +10,7 @@ services:
     environment:
       SHORTLIST_DATA_DIR: /data
       SHORTLIST_DATABASE_URL: ${SHORTLIST_DATABASE_URL:-sqlite:////data/shortlist.db}
-      SHORTLIST_SECRET_KEY: ${SHORTLIST_SECRET_KEY:-dev-insecure-change-me-in-production}
+      SHORTLIST_SECRET_KEY: ${SHORTLIST_SECRET_KEY:?Run deploy/init.sh or deploy/init.ps1 to generate SHORTLIST_SECRET_KEY}
     healthcheck:
       test:
         [
@@ -34,7 +34,7 @@ services:
     environment:
       SHORTLIST_DATA_DIR: /data
       SHORTLIST_DATABASE_URL: ${SHORTLIST_DATABASE_URL:-sqlite:////data/shortlist.db}
-      SHORTLIST_SECRET_KEY: ${SHORTLIST_SECRET_KEY:-dev-insecure-change-me-in-production}
+      SHORTLIST_SECRET_KEY: ${SHORTLIST_SECRET_KEY:?Run deploy/init.sh or deploy/init.ps1 to generate SHORTLIST_SECRET_KEY}
     depends_on:
       api:
         condition: service_healthy

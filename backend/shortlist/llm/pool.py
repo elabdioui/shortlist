@@ -195,6 +195,55 @@ class KeyPool:
 
             return sorted(eligible, key=lambda k: (k.priority, k.id))
 
+    def initialize_daily_count(self, key_id: str, count: int) -> None:
+        """Initialize the daily request counter from persisted UsageLog at startup."""
+        with self._lock:
+            now = self._clock()
+            counters = self._counters.setdefault(key_id, _KeyCounters())
+            counters.prune(now)
+            counters.daily_requests = max(counters.daily_requests, count)
+
+    def refresh_keys(self, keys: list[PooledKey]) -> None:
+        """Refresh key metadata from DB while preserving live counters and active cooldowns."""
+        with self._lock:
+            now = self._clock()
+            incoming_ids = {k.id for k in keys}
+            for existing_id in list(self._keys.keys()):
+                if existing_id not in incoming_ids:
+                    self._keys.pop(existing_id, None)
+                    self._counters.pop(existing_id, None)
+
+            for incoming in keys:
+                prev = self._keys.get(incoming.id)
+                if prev is not None:
+                    incoming.consecutive_429s = prev.consecutive_429s
+                    if (
+                        prev.status == KeyStatus.COOLDOWN
+                        and prev.cooldown_until is not None
+                        and now < prev.cooldown_until
+                        and incoming.status == KeyStatus.ACTIVE
+                    ):
+                        incoming.status = KeyStatus.COOLDOWN
+                        incoming.cooldown_until = prev.cooldown_until
+                self._keys[incoming.id] = incoming
+                self._counters.setdefault(incoming.id, _KeyCounters())
+
+    def try_acquire(self, key_id: str, model: str, estimated_tokens: int = 0) -> bool:
+        """Atomically verify eligibility and increment concurrency/RPM/RPD counters."""
+        with self._lock:
+            key = self._keys.get(key_id)
+            if key is None:
+                return False
+            now = self._clock()
+            if not self._is_eligible_locked(key, model, estimated_tokens, now):
+                return False
+            counters = self._counters[key_id]
+            counters.prune(now)
+            counters.in_flight += 1
+            counters.minute_requests.append(now)
+            counters.daily_requests += 1
+            return True
+
     def acquire(self, key_id: str) -> None:
         """Increment in-flight concurrency and RPM/RPD counters before a request."""
         with self._lock:

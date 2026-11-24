@@ -7,13 +7,13 @@ export function Progress({ value, className }: { value: number; className?: stri
   return (
     <div
       role="progressbar"
-      aria-valuenow={clamped}
+      aria-valuenow={Math.round(clamped)}
       aria-valuemin={0}
       aria-valuemax={100}
-      className={cn("h-2.5 w-full overflow-hidden rounded-full bg-[var(--muted)]", className)}
+      className={cn("h-2 w-full overflow-hidden rounded-full bg-[var(--muted)]", className)}
     >
       <div
-        className="h-full bg-[var(--primary)] transition-all duration-300"
+        className="h-full rounded-full bg-[var(--primary)] transition-all duration-300 ease-out"
         style={{ width: `${clamped}%` }}
       />
     </div>

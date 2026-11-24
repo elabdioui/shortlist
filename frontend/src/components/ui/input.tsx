@@ -8,47 +8,29 @@ import type {
 } from "react";
 import { cn } from "@/lib/utils";
 
+const fieldBase =
+  "flex w-full rounded-lg border border-[var(--input)] bg-[var(--card)] px-3 py-2 text-sm text-[var(--foreground)] shadow-2xs transition-colors placeholder:text-[var(--muted-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--background)] disabled:cursor-not-allowed disabled:opacity-50";
+
 export function Label({ className, ...props }: LabelHTMLAttributes<HTMLLabelElement>) {
   return (
     <label
-      className={cn("block text-sm font-medium text-[var(--foreground)]", className)}
+      className={cn(
+        "text-sm font-medium leading-none text-[var(--foreground)] peer-disabled:cursor-not-allowed peer-disabled:opacity-70",
+        className
+      )}
       {...props}
     />
   );
 }
 
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <input
-      className={cn(
-        "flex h-9 w-full rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-1.5 text-sm text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50",
-        className
-      )}
-      {...props}
-    />
-  );
+  return <input className={cn(fieldBase, "h-9", className)} {...props} />;
 }
 
 export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return (
-    <textarea
-      className={cn(
-        "flex min-h-[100px] w-full rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50",
-        className
-      )}
-      {...props}
-    />
-  );
+  return <textarea className={cn(fieldBase, "min-h-[88px] resize-y", className)} {...props} />;
 }
 
 export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return (
-    <select
-      className={cn(
-        "flex h-9 w-full rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-1.5 text-sm text-[var(--foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50",
-        className
-      )}
-      {...props}
-    />
-  );
+  return <select className={cn(fieldBase, "h-9 pr-8", className)} {...props} />;
 }

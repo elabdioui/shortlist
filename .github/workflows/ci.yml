@@ -24,8 +24,11 @@ jobs:
           python-version: "3.12"
           enable-cache: true
 
-      - name: Install dependencies
-        run: uv sync --all-groups
+      - name: Install dependencies (incl. spaCy models & postgres extra)
+        run: uv sync --all-groups --extra postgres
+
+      - name: Verify spaCy NER models (fr_core_news_md, en_core_web_md)
+        run: uv run python -c "import spacy; spacy.load('fr_core_news_md'); spacy.load('en_core_web_md')"
 
       - name: Ruff lint
         run: uv run ruff check .
@@ -44,6 +47,44 @@ jobs:
 
       - name: Python dependency audit (pip-audit)
         run: uvx pip-audit
+
+  postgres-integration:
+    name: PostgreSQL 16 Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: shortlist
+          POSTGRES_PASSWORD: shortlist
+          POSTGRES_DB: shortlist
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up uv and Python 3.12
+        uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install dependencies with postgres extra
+        run: uv sync --all-groups --extra postgres
+
+      - name: Run Alembic migrations & integration tests against PostgreSQL 16
+        env:
+          SHORTLIST_DATABASE_URL: postgresql+psycopg://shortlist:shortlist@127.0.0.1:5432/shortlist
+          SHORTLIST_ENV: dev
+        run: |
+          uv run --directory backend alembic upgrade head
+          uv run pytest backend/tests/test_api_jobs_candidates_export.py backend/tests/test_worker_queue.py
 
   frontend:
     name: Frontend (eslint, prettier, tsc, build, e2e)

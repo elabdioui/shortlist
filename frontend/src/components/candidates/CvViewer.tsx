@@ -20,20 +20,128 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url
 ).toString();
 
-function HighlightedText({ text, quote }: { text: string; quote: string | null }) {
-  if (!quote || !quote.trim()) {
+export interface TextSpan {
+  start: number;
+  end: number;
+}
+
+const REDACTION_TOKEN_RE = /\[[A-Z0-9_]+\]/g;
+
+/**
+ * Normalize text by collapsing whitespace runs to a single space (lowercased),
+ * while keeping a map from each normalized character index back to the original string index.
+ */
+function normalizeWithIndexMap(text: string): {
+  norm: string;
+  origIndex: number[];
+} {
+  let norm = "";
+  const origIndex: number[] = [];
+  let inWhitespace = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text.charAt(i);
+    if (/\s/.test(ch)) {
+      if (!inWhitespace && norm.length > 0) {
+        norm += " ";
+        origIndex.push(i);
+      }
+      inWhitespace = true;
+    } else {
+      inWhitespace = false;
+      norm += ch.toLowerCase();
+      origIndex.push(i);
+    }
+  }
+  return { norm, origIndex };
+}
+
+/**
+ * Find a quote inside `text` using whitespace-insensitive matching and ignoring
+ * redaction tokens like `[ENTREPRISE_1]` or `[COMPANY_1]`.
+ */
+export function findQuoteRange(text: string, quote: string | null): TextSpan | null {
+  if (!quote || !quote.trim() || !text) return null;
+
+  const { norm, origIndex } = normalizeWithIndexMap(text);
+  if (!norm) return null;
+
+  // Split quote around redaction tokens so we match the non-redacted parts in order
+  const rawSegments = quote
+    .split(REDACTION_TOKEN_RE)
+    .map((seg) => seg.replace(/\s+/g, " ").trim().toLowerCase())
+    .filter((seg) => seg.length >= 3);
+
+  if (rawSegments.length === 0) return null;
+
+  const firstSeg = rawSegments[0]!;
+  let searchFrom = 0;
+  while (searchFrom < norm.length) {
+    const startNorm = norm.indexOf(firstSeg, searchFrom);
+    if (startNorm === -1) return null;
+
+    let cursor = startNorm + firstSeg.length;
+    let allMatched = true;
+
+    for (let s = 1; s < rawSegments.length; s++) {
+      const seg = rawSegments[s]!;
+      const nextIdx = norm.indexOf(seg, cursor);
+      if (nextIdx === -1 || nextIdx - cursor > 160) {
+        allMatched = false;
+        break;
+      }
+      cursor = nextIdx + seg.length;
+    }
+
+    if (allMatched) {
+      const origStart = origIndex[startNorm];
+      const origLast = origIndex[Math.max(startNorm, cursor - 1)];
+      if (origStart !== undefined && origLast !== undefined) {
+        return { start: origStart, end: origLast + 1 };
+      }
+    }
+    searchFrom = startNorm + 1;
+  }
+
+  // Fallback: match the longest non-redacted segment
+  const longest = [...rawSegments].sort((a, b) => b.length - a.length)[0];
+  if (longest && longest.length >= 6) {
+    const idx = norm.indexOf(longest);
+    if (idx !== -1) {
+      const origStart = origIndex[idx];
+      const origLast = origIndex[idx + longest.length - 1];
+      if (origStart !== undefined && origLast !== undefined) {
+        return { start: origStart, end: origLast + 1 };
+      }
+    }
+  }
+
+  return null;
+}
+
+function HighlightedText({
+  text,
+  quote,
+  span,
+}: {
+  text: string;
+  quote: string | null;
+  span?: TextSpan | null;
+}) {
+  const range = useMemo(() => {
+    if (span && span.start >= 0 && span.end > span.start && span.end <= text.length) {
+      return span;
+    }
+    return findQuoteRange(text, quote);
+  }, [text, quote, span]);
+
+  if (!range) {
     return <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{text}</pre>;
   }
 
-  const trimmed = quote.trim();
-  const idx = text.toLowerCase().indexOf(trimmed.toLowerCase());
-  if (idx === -1) {
-    return <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{text}</pre>;
-  }
-
-  const before = text.slice(0, idx);
-  const match = text.slice(idx, idx + trimmed.length);
-  const after = text.slice(idx + trimmed.length);
+  const before = text.slice(0, range.start);
+  const match = text.slice(range.start, range.end);
+  const after = text.slice(range.end);
 
   return (
     <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
@@ -44,6 +152,14 @@ function HighlightedText({ text, quote }: { text: string; quote: string | null }
   );
 }
 
+function escapeHtml(raw: string): string {
+  return raw
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 export function CvViewer({
   candidateId,
   filename,
@@ -51,6 +167,7 @@ export function CvViewer({
   previewText,
   sendsExternalData,
   highlightedQuote,
+  highlightedSpan,
 }: {
   candidateId: string;
   filename: string;
@@ -58,6 +175,7 @@ export function CvViewer({
   previewText: string | null;
   sendsExternalData: boolean | null;
   highlightedQuote: string | null;
+  highlightedSpan?: TextSpan | null;
 }) {
   const t = useTranslations();
   const isPdf = filename.toLowerCase().endsWith(".pdf");
@@ -65,28 +183,48 @@ export function CvViewer({
   const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState<number>(1);
   const [pdfFailed, setPdfFailed] = useState(false);
+  const [pageItems, setPageItems] = useState<string[]>([]);
 
   const fileUrl = useMemo(() => candidatesApi.fileUrl(candidateId), [candidateId]);
 
+  const pageItemRanges = useMemo(() => {
+    if (pageItems.length === 0) return { fullText: "", ranges: [] as TextSpan[] };
+    const ranges: TextSpan[] = [];
+    let fullText = "";
+    for (const str of pageItems) {
+      const start = fullText.length;
+      fullText += str;
+      ranges.push({ start, end: fullText.length });
+      fullText += " ";
+    }
+    return { fullText, ranges };
+  }, [pageItems]);
+
+  const pdfMatchRange = useMemo(
+    () => findQuoteRange(pageItemRanges.fullText, highlightedQuote),
+    [pageItemRanges.fullText, highlightedQuote]
+  );
+
   const textRenderer = useCallback(
-    (textItem: { str: string }) => {
-      if (!highlightedQuote) return textItem.str;
-      const needle = highlightedQuote.trim().toLowerCase();
-      if (!needle) return textItem.str;
-      const hay = textItem.str.toLowerCase();
-      if (needle.includes(hay) && hay.length >= 8) {
-        return `<mark class="evidence-highlight">${textItem.str}</mark>`;
+    (textItem: { str: string; itemIndex: number }) => {
+      if (!pdfMatchRange) return escapeHtml(textItem.str);
+      const itemRange = pageItemRanges.ranges[textItem.itemIndex];
+      if (!itemRange) return escapeHtml(textItem.str);
+
+      const overlapStart = Math.max(itemRange.start, pdfMatchRange.start);
+      const overlapEnd = Math.min(itemRange.end, pdfMatchRange.end);
+      if (overlapStart >= overlapEnd) {
+        return escapeHtml(textItem.str);
       }
-      const idx = hay.indexOf(needle);
-      if (idx !== -1) {
-        const before = textItem.str.slice(0, idx);
-        const match = textItem.str.slice(idx, idx + needle.length);
-        const after = textItem.str.slice(idx + needle.length);
-        return `${before}<mark class="evidence-highlight">${match}</mark>${after}`;
-      }
-      return textItem.str;
+
+      const localStart = overlapStart - itemRange.start;
+      const localEnd = overlapEnd - itemRange.start;
+      const before = escapeHtml(textItem.str.slice(0, localStart));
+      const match = escapeHtml(textItem.str.slice(localStart, localEnd));
+      const after = escapeHtml(textItem.str.slice(localEnd));
+      return `${before}<mark class="evidence-highlight">${match}</mark>${after}`;
     },
-    [highlightedQuote]
+    [pageItemRanges.ranges, pdfMatchRange]
   );
 
   const displayedText = previewText ?? anonymizedText;
@@ -146,7 +284,7 @@ export function CvViewer({
         {viewMode === "anonymized" ? (
           <div className="space-y-3">
             <Alert variant="info">{t("candidate.anonymizedNotice")}</Alert>
-            <HighlightedText text={displayedText} quote={highlightedQuote} />
+            <HighlightedText text={displayedText} quote={highlightedQuote} span={highlightedSpan} />
           </div>
         ) : isPdf && !pdfFailed ? (
           <div className="flex flex-col items-center gap-3">
@@ -163,6 +301,10 @@ export function CvViewer({
               <Page
                 pageNumber={pageNumber}
                 width={540}
+                onGetTextSuccess={(textContent) => {
+                  const strs = textContent.items.map((item) => ("str" in item ? item.str : ""));
+                  setPageItems(strs);
+                }}
                 customTextRenderer={textRenderer}
                 renderTextLayer
                 renderAnnotationLayer={false}

@@ -129,12 +129,28 @@ def build_address_recognizer(language: str = "fr") -> PatternRecognizer:
 
 
 def build_age_dob_recognizer(language: str = "fr") -> PatternRecognizer:
-    """Recognize birth dates and explicit ages."""
+    """Recognize birth dates, birthplaces, and explicit ages."""
     patterns = [
+        Pattern(
+            name="dob_birthplace_fr",
+            regex=(
+                r"\b(?:né(?:\(e\))?|née)\s+le\s+\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}"
+                r"(?:\s+(?:à|a)\s+[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'-]+(?:\s+[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'-]+)?)?"
+            ),
+            score=0.95,
+        ),
+        Pattern(
+            name="dob_birthplace_en",
+            regex=(
+                r"\b[Bb]orn\s+(?:on\s+\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}\s+)?in\s+"
+                r"[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'-]+(?:\s+[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'-]+)?"
+            ),
+            score=0.95,
+        ),
         Pattern(
             name="dob_labeled",
             regex=(
-                r"\b(?:né(?:\(e\))?\s*le|née\s*le|date de naissance|birth\s*date|dob)"
+                r"\b(?:date de naissance|birth\s*date|dob)"
                 r"\s*:?\s*\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}\b"
             ),
             score=0.95,
@@ -159,27 +175,33 @@ def build_age_dob_recognizer(language: str = "fr") -> PatternRecognizer:
 
 
 def build_marital_status_recognizer(language: str = "fr") -> PatternRecognizer:
-    """Recognize marital / family status mentions."""
+    """Recognize marital and family status mentions (FR + EN)."""
     patterns = [
         Pattern(
-            name="marital_labeled",
-            regex=(
-                r"\b(?:situation\s+familiale|état\s+civil|etat\s+civil|marital\s+status)"
-                r"\s*:?\s*[A-Za-zÀ-ÿ -]{3,25}"
-            ),
+            name="family_children_count",
+            regex=r"\b\d{1,2}\s*(?:enfants?|child(?:ren)?)\b",
             score=0.90,
         ),
         Pattern(
             name="marital_keywords",
             regex=(
-                r"\b(?:célibataire|celibataire|marié\(e\)?|marie\(e\)?|"
-                r"divorcé\(e\)?|veuf|veuve|single|married|divorced|widowed)\b"
+                r"\b(?:célibataire|celibataire|marié\(e\)?|mariée|marié|marie\(e\)?|"
+                r"divorcé\(e\)?|divorcée|divorcé|veuf|veuve|pacsé\(e\)?|pacsée|pacsé|"
+                r"single|married|divorced|widowed)\b"
             ),
-            score=0.80,
+            score=0.85,
+        ),
+        Pattern(
+            name="marital_labeled",
+            regex=(
+                r"\b(?:situation\s+familiale|état\s+civil|etat\s+civil|marital\s+status)"
+                r"\s*:?\s*[A-Za-zÀ-ÿ0-9 ,'-]{3,35}"
+            ),
+            score=0.85,
         ),
     ]
     return PatternRecognizer(
-        supported_entity="MARITAL_STATUS",
+        supported_entity="FAMILY_STATUS",
         patterns=patterns,
         supported_language=language,
         name="MaritalStatusRecognizer",
@@ -187,20 +209,15 @@ def build_marital_status_recognizer(language: str = "fr") -> PatternRecognizer:
 
 
 def build_nationality_recognizer(language: str = "fr") -> PatternRecognizer:
-    """Recognize nationality mentions."""
+    """Recognize nationality mentions only when explicitly introduced by a nationality label."""
     patterns = [
         Pattern(
             name="nationality_labeled",
-            regex=r"\b(?:nationalité|nationalite|nationality)\s*:?\s*[A-Za-zÀ-ÿ -]{3,30}",
-            score=0.90,
-        ),
-        Pattern(
-            name="nationality_keywords",
             regex=(
-                r"\b(?:marocain(?:e)?|français(?:e)?|moroccan|french|"
-                r"tunisien(?:ne)?|algérien(?:ne)?|algerien(?:ne)?)\b"
+                r"\b(?:de\s+nationalité|de\s+nationalite|nationalité|nationalite|nationality)"
+                r"\s*:?\s*[A-Za-zÀ-ÿ-]{3,30}"
             ),
-            score=0.75,
+            score=0.92,
         ),
     ]
     return PatternRecognizer(

@@ -187,6 +187,7 @@ def start_analysis_run(
 
     run = AnalysisRun(
         job_id=job.id,
+        criteria_set_version=cset.version,
         status=RunStatus.PENDING.value,
         processed_count=0,
         total_count=len(candidate_ids),

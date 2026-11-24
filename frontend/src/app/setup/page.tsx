@@ -3,10 +3,10 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Moon, Sun } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { AuthLayout } from "@/components/auth/AuthLayout";
 import { useAppPreferences } from "@/components/providers/AppProviders";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ export default function SetupPage() {
   const t = useTranslations();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { locale, setLocale, theme, toggleTheme } = useAppPreferences();
+  const { locale, setLocale } = useAppPreferences();
 
   const completedRef = useRef(false);
 
@@ -66,42 +66,10 @@ export default function SetupPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[var(--background)] p-4">
-      <div className="mb-4 flex w-full max-w-md items-center justify-end gap-2">
-        <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--card)] p-0.5">
-          <button
-            type="button"
-            onClick={() => setLocale("fr")}
-            className={`rounded-md px-2.5 py-1 text-xs font-medium cursor-pointer ${
-              locale === "fr" ? "bg-[var(--primary)] text-white" : "text-[var(--muted-foreground)]"
-            }`}
-          >
-            FR
-          </button>
-          <button
-            type="button"
-            onClick={() => setLocale("en")}
-            className={`rounded-md px-2.5 py-1 text-xs font-medium cursor-pointer ${
-              locale === "en" ? "bg-[var(--primary)] text-white" : "text-[var(--muted-foreground)]"
-            }`}
-          >
-            EN
-          </button>
-        </div>
-        <Button variant="outline" size="icon" onClick={toggleTheme} aria-label="Toggle theme">
-          {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-        </Button>
-      </div>
-
-      <Card className="w-full max-w-md">
+    <AuthLayout>
+      <Card className="shadow-sm">
         <CardHeader>
-          <div className="mb-2 flex items-center gap-2 font-bold text-lg">
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--primary)] text-xs font-bold text-white">
-              S
-            </span>
-            <span>{t("common.appName")}</span>
-          </div>
-          <CardTitle>{t("auth.setupTitle")}</CardTitle>
+          <CardTitle className="text-xl">{t("auth.setupTitle")}</CardTitle>
           <CardDescription>{t("auth.setupSubtitle")}</CardDescription>
         </CardHeader>
         <CardContent>
@@ -131,6 +99,7 @@ export default function SetupPage() {
                 autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
               />
             </div>
 
@@ -139,7 +108,7 @@ export default function SetupPage() {
               <Select
                 id="setup-locale"
                 value={preferredLocale}
-                onChange={(e) => setPreferredLocale(e.target.value === "en" ? "en" : "fr")}
+                onChange={(e) => setPreferredLocale(e.target.value as "fr" | "en")}
               >
                 <option value="fr">Français</option>
                 <option value="en">English</option>
@@ -152,6 +121,6 @@ export default function SetupPage() {
           </form>
         </CardContent>
       </Card>
-    </div>
+    </AuthLayout>
   );
 }

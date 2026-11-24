@@ -5,6 +5,8 @@
 
 from shortlist.core.verify.verifier import (
     DEFAULT_MATCH_THRESHOLD,
+    MIN_QUOTE_CHARS,
+    MIN_QUOTE_WORDS,
     verify_criterion,
     verify_evaluation,
     verify_quote,
@@ -12,6 +14,8 @@ from shortlist.core.verify.verifier import (
 
 __all__ = [
     "DEFAULT_MATCH_THRESHOLD",
+    "MIN_QUOTE_CHARS",
+    "MIN_QUOTE_WORDS",
     "verify_criterion",
     "verify_evaluation",
     "verify_quote",

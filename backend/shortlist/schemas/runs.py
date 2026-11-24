@@ -17,6 +17,7 @@ class AnalysisRunResponse(BaseModel):
 
     id: str
     job_id: str
+    criteria_set_version: int | None = None
     status: RunStatus
     processed_count: int = Field(ge=0)
     total_count: int = Field(ge=0)

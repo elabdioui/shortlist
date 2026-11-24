@@ -193,10 +193,11 @@ class LLMRouter:
             litellm_model = format_litellm_model(step.provider, step.model)
             for key in candidates:
                 for retry_idx in range(MAX_TRANSIENT_RETRIES + 1):
+                    if not self._pool.try_acquire(key.id, step.model, estimated_tokens):
+                        break
                     total_attempts += 1
                     call_tokens = 0
                     call_cost = 0.0
-                    self._pool.acquire(key.id)
                     try:
                         kwargs: dict[str, Any] = {
                             "model": litellm_model,

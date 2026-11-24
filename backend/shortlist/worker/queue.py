@@ -28,6 +28,7 @@ from shortlist.db.models import (
     Job,
     UsageLog,
 )
+from shortlist.llm.pool import KeyPool
 from shortlist.llm.router import BudgetExceededError, LLMRouter
 from shortlist.schemas.common import ExtractionStatus, JobStatus, RunStatus
 from shortlist.schemas.jobs import CriterionItem
@@ -272,6 +273,7 @@ def process_task(
     *,
     secret_key: str,
     force_fake_llm: bool = False,
+    shared_pool: KeyPool | None = None,
 ) -> None:
     """Execute extraction, anonymization, LLM evaluation, verification, and scoring for a task."""
     task = db.get(AnalysisTask, task_id)
@@ -287,12 +289,20 @@ def process_task(
         db.commit()
         return
 
-    criteria_set = db.scalar(
-        select(CriteriaSet)
-        .where(CriteriaSet.job_id == job.id)
-        .order_by(CriteriaSet.version.desc())
-        .limit(1)
-    )
+    if run.criteria_set_version is not None:
+        criteria_set = db.scalar(
+            select(CriteriaSet).where(
+                CriteriaSet.job_id == job.id,
+                CriteriaSet.version == run.criteria_set_version,
+            )
+        )
+    else:
+        criteria_set = db.scalar(
+            select(CriteriaSet)
+            .where(CriteriaSet.job_id == job.id)
+            .order_by(CriteriaSet.version.desc())
+            .limit(1)
+        )
     if criteria_set is None:
         task.status = "failed"
         task.last_error = "Job has no criteria set."
@@ -375,6 +385,7 @@ def process_task(
                 secret_key,
                 force_fake=force_fake_llm,
                 remaining_budget_usd=remaining_budget,
+                shared_pool=shared_pool,
             )
 
             eval_res = evaluate_cv(
@@ -388,10 +399,10 @@ def process_task(
             if pool is not None:
                 sync_pool_states_to_db(db, pool)
 
-            fallback_used = False
-            api_key_id: str | None = None
-            if isinstance(client, LLMRouter) and eval_res.model_used != primary_model:
-                fallback_used = True
+            api_key_id = eval_res.key_id
+            fallback_used = eval_res.fallback_used or (
+                isinstance(client, LLMRouter) and eval_res.model_used != primary_model
+            )
 
             if eval_res.invalid_json or eval_res.output is None:
                 scoring = score_candidate(

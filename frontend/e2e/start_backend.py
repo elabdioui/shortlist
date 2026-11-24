@@ -11,6 +11,7 @@ import threading
 from pathlib import Path
 
 import uvicorn
+from cryptography.fernet import Fernet
 
 # Create an isolated temporary directory for DB and uploaded CV files
 _TMP_DIR = Path(tempfile.mkdtemp(prefix="shortlist_e2e_"))
@@ -19,9 +20,10 @@ _FILES_DIR = _TMP_DIR / "files"
 _FILES_DIR.mkdir(parents=True, exist_ok=True)
 
 os.environ["SHORTLIST_FAKE_LLM"] = "1"
+os.environ["SHORTLIST_ALLOW_BLANK_NLP"] = "1"
 os.environ["SHORTLIST_DATABASE_URL"] = f"sqlite:///{_DB_PATH.as_posix()}"
 os.environ["SHORTLIST_FILES_DIR"] = str(_FILES_DIR)
-os.environ["SHORTLIST_SECRET_KEY"] = "e2e-test-secret-key-not-for-production-use"
+os.environ["SHORTLIST_SECRET_KEY"] = Fernet.generate_key().decode("ascii")
 os.environ["SHORTLIST_ENVIRONMENT"] = "development"
 
 from shortlist.api.app import create_app  # noqa: E402

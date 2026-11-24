@@ -12,11 +12,15 @@ import time
 import uuid
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
+from shortlist.llm.pool import KeyPool, utcnow
+from shortlist.worker.fake_llm import is_fake_llm_enabled
+from shortlist.worker.llm_factory import build_key_pool_from_db, refresh_key_pool_from_db
 from shortlist.worker.queue import (
     claim_next_task,
     process_task,
@@ -55,6 +59,8 @@ class WorkerRunner:
         lease_seconds: int = 120,
         force_fake_llm: bool = False,
         worker_id: str | None = None,
+        clock: Callable[[], datetime] = utcnow,
+        pool_refresh_interval: float = 30.0,
     ) -> None:
         env_conc = os.environ.get("SHORTLIST_WORKER_CONCURRENCY", "")
         resolved_conc = concurrency or (
@@ -67,6 +73,39 @@ class WorkerRunner:
         self.lease_seconds = lease_seconds
         self.force_fake_llm = force_fake_llm
         self.worker_id = worker_id or f"worker-{uuid.uuid4().hex[:8]}"
+        self._clock = clock
+        self._pool_refresh_interval = pool_refresh_interval
+        self._key_pool: KeyPool | None = None
+        self._last_pool_refresh: float = 0.0
+        self._pool_lock = threading.Lock()
+
+    def _get_or_refresh_pool(self) -> KeyPool | None:
+        """Return the process-wide shared KeyPool, refreshing from DB every 30s."""
+        if self.force_fake_llm or is_fake_llm_enabled():
+            return None
+
+        now_mono = time.monotonic()
+        with self._pool_lock:
+            if self._key_pool is None:
+                with self.session_factory() as db:
+                    self._key_pool = _run_with_sqlite_retry(
+                        build_key_pool_from_db,
+                        db,
+                        self.secret_key,
+                        clock=self._clock,
+                    )
+                self._last_pool_refresh = now_mono
+            elif now_mono - self._last_pool_refresh >= self._pool_refresh_interval:
+                with self.session_factory() as db:
+                    _run_with_sqlite_retry(
+                        refresh_key_pool_from_db,
+                        db,
+                        self._key_pool,
+                        self.secret_key,
+                        now=self._clock(),
+                    )
+                self._last_pool_refresh = now_mono
+            return self._key_pool
 
     def recover_stale(self) -> int:
         """Recover expired task leases on startup or between polling cycles."""
@@ -77,6 +116,7 @@ class WorkerRunner:
         return recovered
 
     def _execute_task(self, task_id: str) -> None:
+        shared_pool = self._get_or_refresh_pool()
         with self.session_factory() as db:
             _run_with_sqlite_retry(
                 process_task,
@@ -84,6 +124,7 @@ class WorkerRunner:
                 task_id,
                 secret_key=self.secret_key,
                 force_fake_llm=self.force_fake_llm,
+                shared_pool=shared_pool,
             )
 
     def _claim_one(self) -> str | None:
@@ -112,14 +153,13 @@ class WorkerRunner:
         if len(claimed) == 1 or self.concurrency == 1:
             for tid in claimed:
                 self._execute_task(tid)
-            return len(claimed)
-
-        with ThreadPoolExecutor(max_workers=self.concurrency) as executor:
-            futures: list[Future[None]] = [
-                executor.submit(self._execute_task, tid) for tid in claimed
-            ]
-            for fut in futures:
-                fut.result()
+        else:
+            with ThreadPoolExecutor(max_workers=self.concurrency) as executor:
+                futures: list[Future[None]] = [
+                    executor.submit(self._execute_task, tid) for tid in claimed
+                ]
+                for fut in futures:
+                    fut.result()
 
         with self.session_factory() as db:
             _run_with_sqlite_retry(reconcile_active_runs, db)

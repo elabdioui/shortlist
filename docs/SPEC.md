@@ -128,8 +128,8 @@ Chaque CV traverse 8 étapes. Le LLM n'intervient qu'à l'étape 5 ; tout le res
 3. **Normalisation et contrôle.** Nettoyage des espaces, césure, puces ; détection de la langue ; détection du texte caché (blanc sur blanc, police < 2 pt) signalé comme tentative de manipulation ; troncature contrôlée à \~6 000 tokens avec avertissement.
 4. **Anonymisation (locale).** Microsoft Presidio (MIT) + modèle spaCy français + règles dédiées : téléphones marocains (+212, 06, 07), CIN, emails, liens LinkedIn et GitHub, adresses, âge et date de naissance, situation familiale, nationalité. Remplacement par des balises `[NOM]`, `[EMAIL]`… La table de correspondance reste en base locale, jamais envoyée. Le niveau est réglable ; il est forcé au maximum pour tout fournisseur externe.
 5. **Évaluation par le LLM.** Une requête par CV : grille de critères + fiche de poste + CV anonymisé entre délimiteurs. Sortie JSON stricte validée par Pydantic. Température 0. Pour chaque critère : verdict (`oui`, `partiel`, `non`, `non_trouve`), citation exacte du CV, explication en une phrase. En plus : années d'expérience pertinente, poste actuel, formation la plus haute, langues, points forts, points de vigilance.
-6. **Vérification des preuves.** Chaque citation est recherchée dans le texte du CV (correspondance floue `rapidfuzz`, seuil 90). Citation introuvable = verdict rétrogradé en `non_prouve` et signalé. Les positions trouvées servent au surlignage dans la visionneuse.
-7. **Score et recommandation (code).** Formule ci-dessous, règles fixes, version de la formule enregistrée avec le résultat.
+6. **Vérification des preuves.** Chaque citation (au moins 4 mots ou 20 caractères, sur texte normalisé puis rattachée aux positions d'origine) est recherchée dans le texte du CV (correspondance floue `rapidfuzz`, seuil 90). Citation absente, trop courte ou introuvable (y compris pour un verdict `non` sans citation contraire vérifiée) = verdict rétrogradé en `non_prouve` et signalé. Les positions trouvées servent au surlignage dans la visionneuse.
+7. **Score et recommandation (code, formule v2).** Formule ci-dessous, règles fixes, version de la formule (`v2`, prompt `evaluate_v2.md`) enregistrée avec le résultat.
 8. **Revue humaine.** Le recruteur voit tout, corrige un verdict si besoin (le score se recalcule et la correction est tracée), puis prend la décision.
 
 **Calcul du score.** Valeur par verdict : oui = 1, partiel = 0,5, non, non trouvé et non prouvé = 0. Avec w le poids de chaque critère (1 à 5) :
@@ -205,7 +205,7 @@ Une API Python, un worker d'analyse et une interface Next.js, livrés ensemble p
 | `candidates` | id, job\_id, fichier, sha256, texte extrait, texte anonymisé, table d'anonymisation chiffrée, statut d'extraction |
 | `evaluations` | id, candidate\_id, criteria\_set\_version, modèle, clé utilisée, JSON brut, verdicts vérifiés, score, recommandation, version de formule, tokens, coût |
 | `decisions` | id, candidate\_id, user\_id, décision, note, corrections de verdicts, date |
-| `analysis_runs` | id, job\_id, statut, progression, coût cumulé, erreurs |
+| `analysis_runs` | id, job\_id, criteria\_set\_version, statut, progression, coût cumulé, erreurs |
 | `usage_log` | api\_key\_id, date, requêtes, tokens entrée/sortie, coût |
 | `audit_log` | qui, quoi, quand (consultation, export, suppression) |
 
@@ -235,7 +235,7 @@ Des CV sont des données personnelles de tiers : l'outil doit les protéger mêm
 
 **Sécurité.**
 
-- Clés API chiffrées au repos (Fernet, clé maître dans la variable `SHORTLIST_SECRET_KEY`), jamais renvoyées par l'API (affichage `AIza…x9F2`), jamais dans les logs.
+- Clés API chiffrées au repos (Fernet, clé maître dans la variable `SHORTLIST_SECRET_KEY`, refus de démarrage si absente, invalide ou égale au placeholder par défaut hors `SHORTLIST_ENV=dev` ; génération via `shortlist gen-secret`), jamais renvoyées par l'API (affichage `AIza…x9F2`), jamais dans les logs.
 - Authentification locale (argon2), sessions en cookie httpOnly, protection CSRF, limitation des tentatives de connexion. Premier compte admin créé au premier lancement.
 - Fichiers servis uniquement via l'API après contrôle d'accès ; noms de fichiers régénérés ; aucune exécution de macro DOCX.
 - Logs sans contenu de CV ni données personnelles (seulement des identifiants).

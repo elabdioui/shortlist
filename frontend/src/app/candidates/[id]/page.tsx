@@ -3,7 +3,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ArrowLeft, CheckCircle2, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, RotateCcw, Trash2 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -86,6 +86,9 @@ export default function CandidateDetailPage() {
   const [note, setNote] = useState("");
   const [overrides, setOverrides] = useState<Record<string, CriterionVerdict>>({});
   const [highlightedQuote, setHighlightedQuote] = useState<string | null>(null);
+  const [highlightedSpan, setHighlightedSpan] = useState<{ start: number; end: number } | null>(
+    null
+  );
   const [savedBanner, setSavedBanner] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -97,9 +100,14 @@ export default function CandidateDetailPage() {
         setNote(dec.note ?? "");
         setOverrides(dec.verdict_overrides ?? {});
       }
-      const firstQuote = candidateQuery.data.evaluation?.verdicts.find((v) => v.quote)?.quote;
-      if (firstQuote) {
-        setHighlightedQuote(firstQuote);
+      const firstWithQuote = candidateQuery.data.evaluation?.verdicts.find((v) => v.quote);
+      if (firstWithQuote?.quote) {
+        setHighlightedQuote(firstWithQuote.quote);
+        setHighlightedSpan(
+          firstWithQuote.span
+            ? { start: firstWithQuote.span.start, end: firstWithQuote.span.end }
+            : null
+        );
       }
     }
   }, [candidateQuery.data]);
@@ -152,6 +160,19 @@ export default function CandidateDetailPage() {
       } else {
         router.replace("/");
       }
+    },
+  });
+
+  const reanalyzeMutation = useMutation({
+    mutationFn: () => jobsApi.startRun(jobId!, { resume_failed: false }),
+    onSuccess: () => {
+      if (jobId) {
+        queryClient.invalidateQueries({ queryKey: ["job", jobId] });
+        router.push(`/jobs/${jobId}?tab=upload`);
+      }
+    },
+    onError: (err) => {
+      setError(err instanceof ApiError ? err.detail : t("common.errorGeneric"));
     },
   });
 
@@ -221,6 +242,7 @@ export default function CandidateDetailPage() {
                 previewText={previewQuery.data?.anonymized_text ?? null}
                 sendsExternalData={previewQuery.data?.sends_external_data ?? null}
                 highlightedQuote={highlightedQuote}
+                highlightedSpan={highlightedSpan}
               />
             </div>
 
@@ -233,6 +255,35 @@ export default function CandidateDetailPage() {
                   <span>{t("candidate.decisionSaved")}</span>
                 </Alert>
               )}
+
+              {/* Newer Grid Warning */}
+              {evaluation &&
+                criteriaQuery.data &&
+                criteriaQuery.data.version > evaluation.criteria_set_version && (
+                  <Alert
+                    variant="warning"
+                    className="flex flex-wrap items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 shrink-0" />
+                      <span>
+                        {t("candidate.newerGridWarning", {
+                          latest: criteriaQuery.data.version,
+                          used: evaluation.criteria_set_version,
+                        })}
+                      </span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => reanalyzeMutation.mutate()}
+                      disabled={reanalyzeMutation.isPending || !jobId}
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      <span>{t("candidate.reanalyzeNewGrid")}</span>
+                    </Button>
+                  </Alert>
+                )}
 
               {/* Score Card */}
               <Card>
@@ -251,7 +302,8 @@ export default function CandidateDetailPage() {
                     {evaluation && (
                       <div className="mt-1 text-xs text-[var(--muted-foreground)]">
                         {t("candidate.scoreOriginal", { score: Math.round(evaluation.score) })} ·{" "}
-                        {t("candidate.formulaVersion", { version: evaluation.formula_version })}
+                        {t("candidate.formulaVersion", { version: evaluation.formula_version })} ·{" "}
+                        {t("candidate.gridVersion", { version: evaluation.criteria_set_version })}
                       </div>
                     )}
                   </div>
@@ -288,7 +340,12 @@ export default function CandidateDetailPage() {
                         <div
                           key={v.id}
                           onClick={() => {
-                            if (v.quote) setHighlightedQuote(v.quote);
+                            if (v.quote) {
+                              setHighlightedQuote(v.quote);
+                              setHighlightedSpan(
+                                v.span ? { start: v.span.start, end: v.span.end } : null
+                              );
+                            }
                           }}
                           className="cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--background)] p-3 transition-colors hover:border-blue-400"
                         >

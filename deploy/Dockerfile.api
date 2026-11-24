@@ -20,7 +20,8 @@ COPY backend ./backend
 # Ensure README.md exists for hatchling metadata build
 RUN test -f README.md || touch README.md
 
-RUN uv sync --no-dev
+RUN uv sync --no-dev --extra postgres \
+    && /app/.venv/bin/python -c "import spacy; spacy.load('fr_core_news_md'); spacy.load('en_core_web_md')"
 
 RUN useradd --create-home --shell /bin/bash shortlist \
     && mkdir -p /data \
