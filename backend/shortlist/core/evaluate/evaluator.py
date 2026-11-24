@@ -132,9 +132,7 @@ def evaluate_cv(
         last_key_id = getattr(response, "key_id", None)
         raw_provider = getattr(response, "provider", None)
         last_provider = (
-            str(raw_provider.value)
-            if raw_provider is not None and hasattr(raw_provider, "value")
-            else (str(raw_provider) if raw_provider is not None else None)
+            str(getattr(raw_provider, "value", raw_provider)) if raw_provider is not None else None
         )
         last_fallback_used = bool(getattr(response, "fallback_used", False))
 

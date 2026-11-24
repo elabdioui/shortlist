@@ -12,7 +12,7 @@ from shortlist.schemas.candidates import VerifiedCriterionResult
 from shortlist.schemas.common import CriterionType, CriterionVerdict, Recommendation
 from shortlist.schemas.jobs import CriterionItem
 
-FORMULA_VERSION = "v1"
+FORMULA_VERSION = "v2"
 
 DEFAULT_INTERVIEW_THRESHOLD = 70.0
 DEFAULT_REVIEW_THRESHOLD = 45.0
@@ -73,22 +73,25 @@ def compute_recommendation(
     if extraction_failed or invalid_json or hidden_text_detected:
         return Recommendation.MANUAL_REVIEW
 
-    verdict_by_id = {v.id: v.verdict for v in verdicts}
-    mandatory_verdicts = [
-        verdict_by_id.get(c.id, CriterionVerdict.NOT_FOUND)
-        for c in criteria
-        if c.type == CriterionType.MANDATORY
+    result_by_id = {v.id: v for v in verdicts}
+    mandatory_results = [
+        result_by_id.get(c.id) for c in criteria if c.type == CriterionType.MANDATORY
     ]
 
-    if any(v == CriterionVerdict.NO for v in mandatory_verdicts):
+    if any(
+        r is not None and r.verdict == CriterionVerdict.NO and r.verified for r in mandatory_results
+    ):
         return Recommendation.NOT_RETAINED
 
     if score < review_threshold:
         return Recommendation.NOT_RETAINED
 
     if any(
-        v in (CriterionVerdict.PARTIAL, CriterionVerdict.NOT_FOUND, CriterionVerdict.UNPROVEN)
-        for v in mandatory_verdicts
+        r is None
+        or r.verdict
+        in (CriterionVerdict.PARTIAL, CriterionVerdict.NOT_FOUND, CriterionVerdict.UNPROVEN)
+        or (r.verdict == CriterionVerdict.NO and not r.verified)
+        for r in mandatory_results
     ):
         return Recommendation.REVIEW
 

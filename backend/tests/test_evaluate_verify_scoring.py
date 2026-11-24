@@ -164,7 +164,8 @@ def test_scoring_and_recommendation_rules() -> None:
             original_verdict=verdict,
             quote="q" if verdict != CriterionVerdict.NOT_FOUND else "",
             explanation="exp",
-            verified=verdict in (CriterionVerdict.YES, CriterionVerdict.PARTIAL),
+            verified=verdict
+            in (CriterionVerdict.YES, CriterionVerdict.PARTIAL, CriterionVerdict.NO),
         )
 
     # 100% -> INTERVIEW
@@ -250,7 +251,7 @@ def test_end_to_end_pipeline_with_pii_interception_and_prompt_injection() -> Non
                 LLMOutputCriterion(
                     id="c2",
                     verdict=CriterionVerdict.YES,
-                    quote="SAP MM",
+                    quote="Competences: SAP MM, negociation fournisseurs.",
                     explanation="SAP MM explicitly listed.",
                 ),
             ],
