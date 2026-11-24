@@ -1,0 +1,161 @@
+cases:
+  - id: ma_phone_intl
+    language: fr
+    text: "Contact : +212 612345678 pour entretien."
+    must_redact: ["+212 612345678"]
+    must_preserve: ["entretien"]
+
+  - id: ma_phone_00212
+    language: fr
+    text: "Tél : 00212 701020304"
+    must_redact: ["00212 701020304"]
+    must_preserve: []
+
+  - id: ma_phone_local_06
+    language: fr
+    text: "Mobile : 06 12 34 56 78"
+    must_redact: ["06 12 34 56 78"]
+    must_preserve: []
+
+  - id: ma_phone_local_07
+    language: fr
+    text: "Téléphone : 07.98.76.54.32"
+    must_redact: ["07.98.76.54.32"]
+    must_preserve: []
+
+  - id: ma_cin_labeled
+    language: fr
+    text: "CIN : AB123456 - Permis B"
+    must_redact: ["AB123456"]
+    must_preserve: ["Permis B"]
+
+  - id: ma_cin_standalone
+    language: fr
+    text: "Identifiant BK987654 enregistré."
+    must_redact: ["BK987654"]
+    must_preserve: ["enregistré"]
+
+  - id: email_standard
+    language: fr
+    text: "Courriel : salma.bennani@example.ma"
+    must_redact: ["salma.bennani@example.ma"]
+    must_preserve: []
+
+  - id: linkedin_url
+    language: en
+    text: "Profile: https://www.linkedin.com/in/karim-tazi-99"
+    must_redact: ["linkedin.com/in/karim-tazi-99"]
+    must_preserve: []
+
+  - id: github_url
+    language: en
+    text: "Code: https://github.com/nadia-dev"
+    must_redact: ["github.com/nadia-dev"]
+    must_preserve: []
+
+  - id: street_address_fr
+    language: fr
+    text: "Domicile : 24 Boulevard d'Anfa, 20000 Casablanca"
+    must_redact: ["24 Boulevard d'Anfa", "20000 Casablanca"]
+    must_preserve: []
+
+  - id: street_address_en
+    language: en
+    text: "Address: 42 Baker Street, London"
+    must_redact: ["42 Baker Street"]
+    must_preserve: []
+
+  - id: dob_and_birthplace_fr
+    language: fr
+    text: "Né le 14/05/1995 à Casablanca, disponible immédiatement."
+    must_redact: ["14/05/1995", "Casablanca"]
+    must_preserve: ["disponible immédiatement"]
+
+  - id: dob_and_birthplace_en
+    language: en
+    text: "Born on 12/03/1993 in Marrakech, 5 years in logistics."
+    must_redact: ["12/03/1993", "Marrakech"]
+    must_preserve: ["5 years in logistics"]
+
+  - id: birthplace_only_en
+    language: en
+    text: "Born in Rabat. Master in Supply Chain."
+    must_redact: ["Rabat"]
+    must_preserve: ["Master in Supply Chain"]
+
+  - id: family_status_fr_married_children
+    language: fr
+    text: "Situation : Mariée, 2 enfants. Expérience SAP MM."
+    must_redact: ["Mariée", "2 enfants"]
+    must_preserve: ["Expérience SAP MM"]
+    expected_placeholders: ["[FAMILY_STATUS_"]
+
+  - id: family_status_fr_pacse
+    language: fr
+    text: "Profil : Pacsé, 1 enfant."
+    must_redact: ["Pacsé", "1 enfant"]
+    must_preserve: []
+    expected_placeholders: ["[FAMILY_STATUS_"]
+
+  - id: family_status_fr_divorced_widowed
+    language: fr
+    text: "État civil : divorcé puis veuf."
+    must_redact: ["divorcé", "veuf"]
+    must_preserve: []
+    expected_placeholders: ["[FAMILY_STATUS_"]
+
+  - id: family_status_en_married_children
+    language: en
+    text: "Personal: Married, 3 children. Python developer."
+    must_redact: ["Married", "3 children"]
+    must_preserve: ["Python developer"]
+    expected_placeholders: ["[FAMILY_STATUS_"]
+
+  - id: family_status_en_single_divorced
+    language: en
+    text: "Status: single, 0 child. DevOps engineer."
+    must_redact: ["single", "0 child"]
+    must_preserve: ["DevOps engineer"]
+    expected_placeholders: ["[FAMILY_STATUS_"]
+
+  - id: nationality_labeled_redacted
+    language: fr
+    text: "Nationalité : Marocaine. Acheteur senior."
+    must_redact: ["Marocaine"]
+    must_preserve: ["Acheteur senior"]
+
+  - id: nationality_en_labeled_redacted
+    language: en
+    text: "Nationality: French. Supply Chain Manager."
+    must_redact: ["French"]
+    must_preserve: ["Supply Chain Manager"]
+
+  - id: language_demonyms_preserved_fr
+    language: fr
+    text: "Langues : Français courant, Anglais professionnel, Arabe langue maternelle."
+    must_redact: []
+    must_preserve: ["Français", "Anglais", "Arabe", "courant", "professionnel"]
+
+  - id: language_demonyms_preserved_en
+    language: en
+    text: "Languages: French (fluent), English (native), Spanish (B2 intermediate)."
+    must_redact: []
+    must_preserve: ["French", "English", "Spanish", "fluent", "native", "B2"]
+
+  - id: name_in_first_8_lines_3_tokens
+    language: fr
+    text: "CURRICULUM VITAE\nProfil Supply Chain\nNadia El Fassi\n5 ans d'expérience.\nRéférence : Nadia El Fassi a piloté 10M MAD."
+    must_redact: ["Nadia El Fassi"]
+    must_preserve: ["5 ans d'expérience", "10M MAD"]
+
+  - id: name_in_first_8_lines_4_tokens
+    language: fr
+    text: "Mohamed Amine El Idrissi\nIngénieur DevOps\nExpérience Kubernetes."
+    must_redact: ["Mohamed Amine El Idrissi"]
+    must_preserve: ["Ingénieur DevOps", "Kubernetes"]
+
+  - id: name_derived_from_email
+    language: fr
+    text: "Email : youssef.berrada@example.ma\nYoussef Berrada a géré les achats."
+    must_redact: ["youssef.berrada@example.ma", "Youssef Berrada"]
+    must_preserve: ["géré les achats"]
