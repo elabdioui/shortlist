@@ -1,26 +1,28 @@
 # Copyright (C) 2026 Shortlist Contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-"""Build an LLMClient (FakeLLMClient or DB-backed LLMRouter) for evaluation and criteria gen."""
+"""Build and refresh a shared LLMClient/KeyPool for evaluation and criteria generation."""
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from shortlist.api.crypto import decrypt_secret
 from shortlist.db.models import APIKey, Job, ModelProfile, Provider, UsageLog
 from shortlist.llm.client import LLMClient
-from shortlist.llm.pool import KeyPool, PooledKey
+from shortlist.llm.pool import KeyPool, PooledKey, utcnow
 from shortlist.llm.router import LLMRouter
 from shortlist.schemas.common import KeyStatus, KeyTier, ProviderType, RoutingStrategy
 from shortlist.schemas.providers import ModelProfileEntry
 from shortlist.worker.fake_llm import build_deterministic_fake_llm, is_fake_llm_enabled
 
 
-def _current_month_spend(db: Session, api_key_id: str) -> float:
-    month_prefix = datetime.now(UTC).strftime("%Y-%m")
+def _current_month_spend(db: Session, api_key_id: str, now: datetime) -> float:
+    month_prefix = now.strftime("%Y-%m")
     total = db.scalar(
         select(func.coalesce(func.sum(UsageLog.cost_usd), 0.0)).where(
             UsageLog.api_key_id == api_key_id,
@@ -30,10 +32,22 @@ def _current_month_spend(db: Session, api_key_id: str) -> float:
     return float(total or 0.0)
 
 
-def build_key_pool_from_db(db: Session, secret_key: str) -> KeyPool:
-    """Load active providers and encrypted API keys from the database into a KeyPool."""
-    from shortlist.api.crypto import decrypt_secret
+def _today_request_count(db: Session, api_key_id: str, now: datetime) -> int:
+    today = now.strftime("%Y-%m-%d")
+    total = db.scalar(
+        select(func.coalesce(func.sum(UsageLog.requests), 0)).where(
+            UsageLog.api_key_id == api_key_id,
+            UsageLog.usage_date == today,
+        )
+    )
+    return int(total or 0)
 
+
+def _load_pooled_keys(
+    db: Session,
+    secret_key: str,
+    now: datetime,
+) -> tuple[list[PooledKey], dict[str, int]]:
     rows = db.execute(
         select(APIKey, Provider)
         .join(Provider, APIKey.provider_id == Provider.id)
@@ -41,6 +55,7 @@ def build_key_pool_from_db(db: Session, secret_key: str) -> KeyPool:
     ).all()
 
     pooled_keys: list[PooledKey] = []
+    daily_counts: dict[str, int] = {}
     for key_row, provider_row in rows:
         raw_secret = decrypt_secret(key_row.encrypted_secret, secret_key)
         pooled_keys.append(
@@ -60,10 +75,40 @@ def build_key_pool_from_db(db: Session, secret_key: str) -> KeyPool:
                 concurrency=key_row.concurrency,
                 status=KeyStatus(key_row.status),
                 cooldown_until=key_row.cooldown_until,
-                monthly_spend_usd=_current_month_spend(db, key_row.id),
+                monthly_spend_usd=_current_month_spend(db, key_row.id, now),
             )
         )
-    return KeyPool(pooled_keys)
+        daily_counts[key_row.id] = _today_request_count(db, key_row.id, now)
+    return pooled_keys, daily_counts
+
+
+def build_key_pool_from_db(
+    db: Session,
+    secret_key: str,
+    *,
+    clock: Callable[[], datetime] = utcnow,
+) -> KeyPool:
+    """Load active providers and encrypted API keys into a KeyPool, restoring daily RPD."""
+    now = clock()
+    pooled_keys, daily_counts = _load_pooled_keys(db, secret_key, now)
+    pool = KeyPool(pooled_keys, clock=clock)
+    for key_id, count in daily_counts.items():
+        if count > 0:
+            pool.initialize_daily_count(key_id, count)
+    return pool
+
+
+def refresh_key_pool_from_db(
+    db: Session,
+    pool: KeyPool,
+    secret_key: str,
+    *,
+    now: datetime | None = None,
+) -> None:
+    """Refresh an existing shared KeyPool from DB while preserving live counters."""
+    current = now or datetime.now(UTC)
+    pooled_keys, _daily_counts = _load_pooled_keys(db, secret_key, current)
+    pool.refresh_keys(pooled_keys)
 
 
 def sync_pool_states_to_db(db: Session, pool: KeyPool) -> None:
@@ -84,12 +129,13 @@ def build_llm_client_for_job(
     *,
     force_fake: bool = False,
     remaining_budget_usd: float | None = None,
+    shared_pool: KeyPool | None = None,
 ) -> tuple[LLMClient, KeyPool | None, str]:
     """Return (LLMClient, optional KeyPool, primary_model_name) for a job or global default."""
     if force_fake or is_fake_llm_enabled():
         return build_deterministic_fake_llm(), None, "fake-deterministic-v1"
 
-    pool = build_key_pool_from_db(db, secret_key)
+    pool = shared_pool if shared_pool is not None else build_key_pool_from_db(db, secret_key)
     profile_row: ModelProfile | None = None
     if job is not None and job.profile_id:
         profile_row = db.get(ModelProfile, job.profile_id)
@@ -100,7 +146,6 @@ def build_llm_client_for_job(
         entries = [ModelProfileEntry.model_validate(m) for m in profile_row.models]
         strategy = RoutingStrategy(profile_row.strategy)
     else:
-        # Fallback: construct a single-step profile from the first active key's provider.
         keys = pool.list_keys()
         if not keys:
             raise RuntimeError("No active AI provider keys or model profiles configured.")

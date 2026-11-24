@@ -28,6 +28,7 @@ from shortlist.db.models import (
     Job,
     UsageLog,
 )
+from shortlist.llm.pool import KeyPool
 from shortlist.llm.router import BudgetExceededError, LLMRouter
 from shortlist.schemas.common import ExtractionStatus, JobStatus, RunStatus
 from shortlist.schemas.jobs import CriterionItem
@@ -272,6 +273,7 @@ def process_task(
     *,
     secret_key: str,
     force_fake_llm: bool = False,
+    shared_pool: KeyPool | None = None,
 ) -> None:
     """Execute extraction, anonymization, LLM evaluation, verification, and scoring for a task."""
     task = db.get(AnalysisTask, task_id)
@@ -383,6 +385,7 @@ def process_task(
                 secret_key,
                 force_fake=force_fake_llm,
                 remaining_budget_usd=remaining_budget,
+                shared_pool=shared_pool,
             )
 
             eval_res = evaluate_cv(
