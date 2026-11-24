@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (ruff, mypy, pytest, eval)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up uv and Python 3.12
+        uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --all-groups
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+      - name: Mypy strict typecheck
+        run: uv run mypy backend/shortlist
+
+      - name: Run pytest with core coverage
+        run: uv run pytest --cov=shortlist.core --cov-report=term-missing backend/tests
+
+      - name: Run synthetic eval benchmark
+        run: uv run shortlist eval --fake-llm --eval-dir eval
+
+      - name: Python dependency audit (pip-audit)
+        run: uvx pip-audit
+
+  frontend:
+    name: Frontend (eslint, prettier, tsc, build, e2e)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Set up uv and Python 3.12 (for E2E API/worker)
+        uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install Python dependencies
+        run: uv sync --all-groups
+
+      - name: Install frontend dependencies
+        run: pnpm --dir frontend install
+
+      - name: ESLint
+        run: pnpm --dir frontend lint
+
+      - name: Prettier format check
+        run: pnpm --dir frontend format:check
+
+      - name: TypeScript typecheck
+        run: pnpm --dir frontend typecheck
+
+      - name: Next.js production build
+        run: pnpm --dir frontend build
+
+      - name: Install Playwright Chromium
+        run: pnpm --dir frontend exec playwright install --with-deps chromium
+
+      - name: Run Playwright E2E suite
+        env:
+          SHORTLIST_FAKE_LLM: "1"
+        run: pnpm --dir frontend test:e2e
+
+      - name: Frontend dependency audit
+        run: pnpm --dir frontend audit --audit-level=high
+
+  docker:
+    name: Docker Compose, Multi-Arch Build & Trivy Scan
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Validate Docker Compose configuration
+        run: docker compose -f deploy/docker-compose.yml config -q
+
+      - name: Build api, worker, and web images
+        run: docker compose -f deploy/docker-compose.yml build
+
+      - name: Scan built images with Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: deploy-api
+          format: table
+          exit-code: "0"
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH

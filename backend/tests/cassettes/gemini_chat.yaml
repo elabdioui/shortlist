@@ -1,0 +1,18 @@
+version: 1
+interactions:
+- request:
+    body: '{"contents": [{"role": "user", "parts": [{"text": "Reply with OK."}]}], "generationConfig": {"temperature": 0.0}}'
+    headers:
+      content-type:
+      - application/json
+    method: POST
+    uri: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=sk-redacted-test-key
+  response:
+    body:
+      string: '{"candidates": [{"content": {"parts": [{"text": "OK_GEMINI"}], "role": "model"}, "finishReason": "STOP", "index": 0}], "usageMetadata": {"promptTokenCount": 10, "candidatesTokenCount": 3, "totalTokenCount": 13}}'
+    headers:
+      content-type:
+      - application/json
+    status:
+      code: 200
+      message: OK

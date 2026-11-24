@@ -1,0 +1,3 @@
+Leo Robert
+Email: leo.robert@example.com
+Experience: 3.5 years Python backend developer working on Flask and PostgreSQL.

@@ -1,0 +1,102 @@
+{
+  "cv_01_alice_martin.txt": {
+    "expected_verdicts": {
+      "c1": "yes",
+      "c2": "yes",
+      "c3": "yes",
+      "c4": "yes"
+    },
+    "expected_rank": 1,
+    "expected_recommendation": "interview"
+  },
+  "cv_02_lucas_dubois.txt": {
+    "expected_verdicts": {
+      "c1": "yes",
+      "c2": "yes",
+      "c3": "yes",
+      "c4": "no"
+    },
+    "expected_rank": 2,
+    "expected_recommendation": "interview"
+  },
+  "cv_03_emma_bernard.txt": {
+    "expected_verdicts": {
+      "c1": "yes",
+      "c2": "yes",
+      "c3": "partial",
+      "c4": "yes"
+    },
+    "expected_rank": 3,
+    "expected_recommendation": "review"
+  },
+  "cv_04_noah_petit.txt": {
+    "expected_verdicts": {
+      "c1": "partial",
+      "c2": "yes",
+      "c3": "yes",
+      "c4": "yes"
+    },
+    "expected_rank": 4,
+    "expected_recommendation": "review"
+  },
+  "cv_05_chloe_moreau.txt": {
+    "expected_verdicts": {
+      "c1": "yes",
+      "c2": "partial",
+      "c3": "yes",
+      "c4": "yes"
+    },
+    "expected_rank": 5,
+    "expected_recommendation": "review"
+  },
+  "cv_06_leo_robert.txt": {
+    "expected_verdicts": {
+      "c1": "yes",
+      "c2": "yes",
+      "c3": "not_found",
+      "c4": "no"
+    },
+    "expected_rank": 6,
+    "expected_recommendation": "review"
+  },
+  "cv_07_ines_simon.txt": {
+    "expected_verdicts": {
+      "c1": "yes",
+      "c2": "no",
+      "c3": "yes",
+      "c4": "no"
+    },
+    "expected_rank": 7,
+    "expected_recommendation": "not_retained"
+  },
+  "cv_08_hugo_laurent.txt": {
+    "expected_verdicts": {
+      "c1": "no",
+      "c2": "yes",
+      "c3": "no",
+      "c4": "yes"
+    },
+    "expected_rank": 8,
+    "expected_recommendation": "not_retained"
+  },
+  "cv_09_lea_michel.txt": {
+    "expected_verdicts": {
+      "c1": "no",
+      "c2": "no",
+      "c3": "no",
+      "c4": "no"
+    },
+    "expected_rank": 9,
+    "expected_recommendation": "not_retained"
+  },
+  "cv_10_thomas_garcia.txt": {
+    "expected_verdicts": {
+      "c1": "no",
+      "c2": "no",
+      "c3": "no",
+      "c4": "no"
+    },
+    "expected_rank": 10,
+    "expected_recommendation": "not_retained"
+  }
+}

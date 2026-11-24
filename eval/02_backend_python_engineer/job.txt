@@ -1,0 +1,8 @@
+Title: Backend Python Engineer
+Location: Remote / Hybrid
+
+Requirements:
+- Minimum 3 years of backend development experience with Python (FastAPI or Django).
+- Strong proficiency with SQL databases (PostgreSQL) and schema migrations.
+- Experience writing automated tests with pytest.
+- Docker and CI/CD experience is a bonus.

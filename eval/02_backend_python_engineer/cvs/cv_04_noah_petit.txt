@@ -1,0 +1,3 @@
+Noah Petit
+Email: noah.petit@example.com
+Experience: 2 years as Python/FastAPI developer. PostgreSQL, pytest, Docker, and GitHub Actions CI.

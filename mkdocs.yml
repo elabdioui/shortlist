@@ -1,0 +1,26 @@
+site_name: Shortlist
+site_description: Open-source, self-hosted AI CV screening tool with verifiable evidence citations.
+repo_name: shortlist-org/shortlist
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - content.code.copy
+
+nav:
+  - Home: README.md
+  - Accueil (FR): README.fr.md
+  - Recruiter Guide (EN): docs/recruiter-guide.en.md
+  - Guide Recruteur (FR): docs/recruiter-guide.fr.md
+  - AI Providers & Costs: docs/provider-guide.md
+  - Architecture:
+      - Specification: docs/SPEC.md
+      - ADR-001 Stack: docs/adr/ADR-001-stack.md
+  - Trust & Governance:
+      - Privacy: PRIVACY.md
+      - Limitations: LIMITATIONS.md
+      - Security: SECURITY.md
+      - Contributing: CONTRIBUTING.md
+      - Code of Conduct: CODE_OF_CONDUCT.md
+      - Changelog: CHANGELOG.md

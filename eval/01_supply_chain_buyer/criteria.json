@@ -1,0 +1,30 @@
+[
+  {
+    "id": "c1",
+    "label": "Expérience achats >= 3 ans",
+    "description": "Au moins 3 ans en achats ou approvisionnement industriel.",
+    "type": "mandatory",
+    "weight": 5
+  },
+  {
+    "id": "c2",
+    "label": "Maîtrise de SAP MM",
+    "description": "Utilisation opérationnelle de SAP MM pour les commandes et stocks.",
+    "type": "mandatory",
+    "weight": 4
+  },
+  {
+    "id": "c3",
+    "label": "Anglais professionnel",
+    "description": "Capacité à négocier avec des fournisseurs en anglais.",
+    "type": "mandatory",
+    "weight": 3
+  },
+  {
+    "id": "c4",
+    "label": "Bac+5 Supply Chain / Logistique",
+    "description": "Master ou diplôme d'ingénieur en supply chain ou logistique.",
+    "type": "bonus",
+    "weight": 2
+  }
+]

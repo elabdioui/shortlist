@@ -1,0 +1,3 @@
+Chloe Moreau
+Email: chloe.moreau@example.com
+Experience: 4 years Python Django backend. Used SQLite and MongoDB mostly, basic SQL knowledge. Extensive pytest and Docker Compose experience.

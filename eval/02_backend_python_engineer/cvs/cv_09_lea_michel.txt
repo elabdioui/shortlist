@@ -1,0 +1,3 @@
+Lea Michel
+Email: lea.michel@example.com
+Experience: 3 years Frontend React/TypeScript developer. No backend Python, SQL, or pytest.

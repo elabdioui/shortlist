@@ -1,0 +1,3 @@
+Lucas Dubois
+Email: lucas.dubois@example.com
+Experience: 4 years developing Django and FastAPI APIs. Deep PostgreSQL query optimization and comprehensive pytest suites. Deployed on bare-metal VMs without Docker.

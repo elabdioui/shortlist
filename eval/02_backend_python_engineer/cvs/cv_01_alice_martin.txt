@@ -1,0 +1,3 @@
+Alice Martin
+Email: alice.martin@example.com | GitHub: github.com/alicem
+Experience: 5 years as Backend Python Engineer at CloudScale. Built FastAPI microservices backed by PostgreSQL with Alembic migrations. Maintained 90% pytest coverage and Docker GitHub Actions CI/CD.

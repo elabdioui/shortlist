@@ -1,0 +1,3 @@
+Emma Bernard
+Email: emma.bernard@example.com
+Experience: 4 years Python backend (FastAPI) with PostgreSQL. Wrote basic unittest scripts, limited pytest usage. Strong Docker and GitLab CI experience.

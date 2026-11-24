@@ -1,0 +1,101 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    ports:
+      - "${SHORTLIST_API_PORT:-8000}:8000"
+    volumes:
+      - shortlist_data:/data
+    environment:
+      SHORTLIST_DATA_DIR: /data
+      SHORTLIST_DATABASE_URL: ${SHORTLIST_DATABASE_URL:-sqlite:////data/shortlist.db}
+      SHORTLIST_SECRET_KEY: ${SHORTLIST_SECRET_KEY:-dev-insecure-change-me-in-production}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "/app/.venv/bin/python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.worker
+    volumes:
+      - shortlist_data:/data
+    environment:
+      SHORTLIST_DATA_DIR: /data
+      SHORTLIST_DATABASE_URL: ${SHORTLIST_DATABASE_URL:-sqlite:////data/shortlist.db}
+      SHORTLIST_SECRET_KEY: ${SHORTLIST_SECRET_KEY:-dev-insecure-change-me-in-production}
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    ports:
+      - "${SHORTLIST_WEB_PORT:-3000}:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      INTERNAL_API_URL: http://api:8000
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-shortlist}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-shortlist}
+      POSTGRES_DB: ${POSTGRES_DB:-shortlist}
+    volumes:
+      - shortlist_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-shortlist}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["ollama"]
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - shortlist_ollama:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  shortlist_data:
+  shortlist_pgdata:
+  shortlist_ollama:

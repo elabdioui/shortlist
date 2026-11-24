@@ -1,0 +1,3 @@
+Hugo Laurent
+Email: hugo.laurent@example.com
+Experience: 4 years Java Spring Boot developer with PostgreSQL and Docker. No Python backend experience.

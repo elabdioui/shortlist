@@ -1,0 +1,30 @@
+[
+  {
+    "id": "c1",
+    "label": "Expérience RH >= 2 ans",
+    "description": "Au moins 2 ans en recrutement et administration du personnel.",
+    "type": "mandatory",
+    "weight": 5
+  },
+  {
+    "id": "c2",
+    "label": "Droit du travail marocain",
+    "description": "Connaissance pratique du code du travail marocain et CNSS.",
+    "type": "mandatory",
+    "weight": 4
+  },
+  {
+    "id": "c3",
+    "label": "SIRH et Excel",
+    "description": "Maîtrise d'un SIRH et d'Excel pour le suivi RH.",
+    "type": "mandatory",
+    "weight": 3
+  },
+  {
+    "id": "c4",
+    "label": "Gestion de la formation",
+    "description": "Expérience en plan de formation et OFPPT/CSF.",
+    "type": "bonus",
+    "weight": 2
+  }
+]

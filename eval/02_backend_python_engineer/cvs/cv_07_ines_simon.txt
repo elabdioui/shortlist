@@ -1,0 +1,3 @@
+Ines Simon
+Email: ines.simon@example.com
+Experience: 3 years Python scripting and pytest automation. No SQL or PostgreSQL database experience.

@@ -1,0 +1,30 @@
+[
+  {
+    "id": "c1",
+    "label": "Python backend >= 3 years",
+    "description": "At least 3 years building backend services in Python (FastAPI/Django).",
+    "type": "mandatory",
+    "weight": 5
+  },
+  {
+    "id": "c2",
+    "label": "PostgreSQL & SQL",
+    "description": "Production experience with PostgreSQL and SQL schema migrations.",
+    "type": "mandatory",
+    "weight": 4
+  },
+  {
+    "id": "c3",
+    "label": "Automated testing (pytest)",
+    "description": "Experience writing unit and integration tests with pytest.",
+    "type": "mandatory",
+    "weight": 3
+  },
+  {
+    "id": "c4",
+    "label": "Docker & CI/CD",
+    "description": "Containerization with Docker and CI/CD pipelines.",
+    "type": "bonus",
+    "weight": 2
+  }
+]
