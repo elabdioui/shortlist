@@ -3,7 +3,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, ArrowRight, Briefcase, CheckCircle2, Plus, Trash2 } from "lucide-react";
+import { ArrowRight, Briefcase, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -108,35 +108,34 @@ export default function DashboardPage() {
           </Button>
         </div>
 
-        {/* Summary KPIs */}
+        {/* Summary KPIs — numbers only, tabular figures */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardHeader className="pb-1">
               <CardDescription>{t("dashboard.totalJobs")}</CardDescription>
-              <Briefcase className="h-4 w-4 text-[var(--muted-foreground)]" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-semibold tracking-tight">{jobs.length}</div>
+              <div className="text-3xl font-medium tracking-tight tabular-nums">{jobs.length}</div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardHeader className="pb-1">
               <CardDescription>{t("dashboard.runningJobs")}</CardDescription>
-              <Activity className="h-4 w-4 text-amber-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-semibold tracking-tight">{runningCount}</div>
+              <div className="text-3xl font-medium tracking-tight tabular-nums">{runningCount}</div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardHeader className="pb-1">
               <CardDescription>{t("dashboard.completedJobs")}</CardDescription>
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-semibold tracking-tight">{completedCount}</div>
+              <div className="text-3xl font-medium tracking-tight tabular-nums">
+                {completedCount}
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -212,7 +211,7 @@ export default function DashboardPage() {
             {jobs.map((job) => (
               <Card
                 key={job.id}
-                className="group flex flex-col justify-between transition-all hover:border-[var(--primary)]/40 hover:shadow-sm"
+                className="group flex flex-col justify-between transition-[border-color] duration-150 hover:border-[var(--foreground)]/25"
               >
                 <CardHeader>
                   <div className="flex items-start justify-between gap-2">

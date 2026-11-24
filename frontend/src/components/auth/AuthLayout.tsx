@@ -2,9 +2,10 @@
 
 "use client";
 
-import { CheckCircle2, Moon, ShieldCheck, Sparkles, Sun } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
+import { ShortlistMark } from "@/components/layout/ShortlistMark";
 import { useAppPreferences } from "@/components/providers/AppProviders";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -15,54 +16,71 @@ export function AuthLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="grid min-h-screen lg:grid-cols-2 bg-[var(--background)] text-[var(--foreground)]">
-      {/* Left brand / value panel */}
-      <div className="relative hidden flex-col justify-between overflow-hidden bg-zinc-950 p-10 text-zinc-100 lg:flex">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(99,102,241,0.28),transparent_55%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.14),transparent_50%)]"
-        />
-        <div className="relative flex items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm">
-            <Sparkles className="h-4 w-4" />
+      {/* Left product preview panel — quiet graphite, no radial blobs */}
+      <div className="hidden flex-col justify-between border-r border-[var(--border)] bg-[#0f0f10] p-10 text-[#ededed] lg:flex">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ededed] text-[#0f0f10]">
+            <ShortlistMark className="h-4 w-4" />
           </span>
-          <span className="text-lg font-semibold tracking-tight">{t("common.appName")}</span>
+          <span className="text-base font-medium tracking-tight">{t("common.appName")}</span>
         </div>
 
-        <div className="relative max-w-md space-y-6">
-          <h2 className="text-3xl font-semibold tracking-tight leading-tight">
-            {t("common.tagline")}
-          </h2>
-          <ul className="space-y-3 text-sm text-zinc-300">
-            <li className="flex items-start gap-2.5">
-              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
-              <span>Anonymisation locale avant tout appel IA externe</span>
-            </li>
-            <li className="flex items-start gap-2.5">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-indigo-400" />
-              <span>Chaque verdict appuyé par une citation exacte vérifiée dans le CV</span>
-            </li>
-            <li className="flex items-start gap-2.5">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-indigo-400" />
-              <span>Score déterministe et décision finale toujours humaine</span>
-            </li>
-          </ul>
+        <div className="mx-auto w-full max-w-md space-y-6">
+          <div className="space-y-2">
+            <h2 className="text-2xl font-medium tracking-tight leading-snug text-[#ededed]">
+              {t("common.tagline")}
+            </h2>
+            <p className="text-sm text-[#8c8c94]">
+              Anonymisation locale, citations vérifiées dans le CV et score déterministe.
+            </p>
+          </div>
+
+          {/* Product dossier preview */}
+          <div className="rounded-xl border border-white/10 bg-[#19191b] p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-white/8 pb-3">
+              <div>
+                <p className="text-sm font-medium text-[#ededed]">Acheteur Supply Chain</p>
+                <p className="text-xs text-[#8c8c94] font-mono tabular-nums">
+                  Grille v2 · Seuils 70/45
+                </p>
+              </div>
+              <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-xs font-medium tabular-nums text-emerald-400">
+                86 / 100
+              </span>
+            </div>
+
+            <div className="space-y-2.5 text-xs">
+              <div className="flex items-center justify-between text-[#a1a1a6]">
+                <span>Négociation fournisseurs (5 ans)</span>
+                <span className="font-mono text-emerald-400">Oui · Vérifié</span>
+              </div>
+              <blockquote className="rounded-lg border border-white/8 bg-[#141415] p-3 text-[#d4d4d8] leading-relaxed">
+                «{" "}
+                <mark className="rounded bg-amber-300/20 px-1 py-0.5 text-amber-200">
+                  pilotage d&apos;appels d&apos;offres internationaux et négociation de contrats
+                  cadres sur 6 ans
+                </mark>{" "}
+                »
+              </blockquote>
+            </div>
+          </div>
         </div>
 
-        <p className="relative text-xs text-zinc-500">AGPL-3.0 · Self-hosted AI CV Screening</p>
+        <p className="font-mono text-xs text-[#66666e]">AGPL-3.0 · Self-hosted</p>
       </div>
 
       {/* Right form panel */}
       <div className="flex flex-col justify-between p-6 md:p-10">
         <div className="flex items-center justify-between lg:justify-end gap-2">
           <div className="flex items-center gap-2 lg:hidden">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--primary)] text-white">
-              <Sparkles className="h-4 w-4" />
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)]">
+              <ShortlistMark className="h-4 w-4" />
             </span>
-            <span className="font-semibold tracking-tight">{t("common.appName")}</span>
+            <span className="font-medium tracking-tight">{t("common.appName")}</span>
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--muted)]/60 p-0.5 text-xs">
+            <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--muted)] p-0.5 text-xs">
               <button
                 type="button"
                 onClick={() => setLocale("fr")}
@@ -89,7 +107,11 @@ export function AuthLayout({ children }: { children: ReactNode }) {
               </button>
             </div>
             <Button variant="outline" size="icon" onClick={toggleTheme} aria-label="Toggle theme">
-              {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+              {theme === "light" ? (
+                <Moon className="h-4 w-4" strokeWidth={1.5} />
+              ) : (
+                <Sun className="h-4 w-4" strokeWidth={1.5} />
+              )}
             </Button>
           </div>
         </div>

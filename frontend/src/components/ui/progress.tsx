@@ -13,7 +13,7 @@ export function Progress({ value, className }: { value: number; className?: stri
       className={cn("h-2 w-full overflow-hidden rounded-full bg-[var(--muted)]", className)}
     >
       <div
-        className="h-full rounded-full bg-[var(--primary)] transition-all duration-300 ease-out"
+        className="h-full rounded-full bg-[var(--brand)] transition-[width] duration-300 ease-out"
         style={{ width: `${clamped}%` }}
       />
     </div>

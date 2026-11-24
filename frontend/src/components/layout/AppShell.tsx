@@ -14,7 +14,6 @@ import {
   Menu,
   Moon,
   ShieldCheck,
-  Sparkles,
   Sun,
   Users,
   X,
@@ -24,6 +23,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect, useState, type ReactNode } from "react";
 import { CommandPalette } from "@/components/layout/CommandPalette";
+import { ShortlistMark } from "@/components/layout/ShortlistMark";
 import { useAppPreferences } from "@/components/providers/AppProviders";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -119,18 +119,15 @@ export function AppShell({ children }: { children: ReactNode }) {
           collapsed ? "w-[68px]" : "w-64"
         )}
       >
-        <div className="flex h-14 items-center justify-between border-b border-[var(--sidebar-border)] px-3.5">
+        <div className="flex h-14 items-center justify-between border-b border-[var(--sidebar-border)] px-4">
           <Link href="/" className="flex items-center gap-2.5 overflow-hidden">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--primary)] text-white shadow-xs">
-              <Sparkles className="h-4 w-4" />
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--primary)] text-[var(--primary-foreground)]">
+              <ShortlistMark className="h-3.5 w-3.5" />
             </span>
             {!collapsed && (
-              <div className="flex flex-col truncate">
-                <span className="text-sm font-semibold tracking-tight">{t("common.appName")}</span>
-                <span className="text-[11px] text-[var(--muted-foreground)] truncate">
-                  {t("common.tagline")}
-                </span>
-              </div>
+              <span className="text-sm font-medium tracking-tight truncate">
+                {t("common.appName")}
+              </span>
             )}
           </Link>
           <button
@@ -162,14 +159,14 @@ export function AppShell({ children }: { children: ReactNode }) {
                 href={item.href}
                 title={collapsed ? item.label : undefined}
                 className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors",
+                  "flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-sm font-medium transition-colors",
                   collapsed && "justify-center px-0",
                   active
-                    ? "bg-[var(--primary)]/10 text-[var(--primary)]"
-                    : "text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
+                    ? "bg-[var(--card)] text-[var(--foreground)] shadow-[0_1px_2px_rgba(0,0,0,0.04)] border border-[var(--border)] dark:bg-[var(--muted)]"
+                    : "text-[var(--muted-foreground)] hover:bg-[var(--muted)]/70 hover:text-[var(--foreground)]"
                 )}
               >
-                <Icon className="h-4 w-4 shrink-0" />
+                <Icon className="h-4 w-4 shrink-0" strokeWidth={1.5} />
                 {!collapsed && <span className="truncate">{item.label}</span>}
               </Link>
             );

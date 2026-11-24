@@ -15,7 +15,7 @@ export function TableHeader({ className, ...props }: HTMLAttributes<HTMLTableSec
   return (
     <thead
       className={cn(
-        "border-b border-[var(--border)] bg-[var(--muted)]/50 text-xs uppercase tracking-wider text-[var(--muted-foreground)]",
+        "border-b border-[var(--border)] bg-[var(--muted)]/50 text-xs font-medium text-[var(--muted-foreground)]",
         className
       )}
       {...props}
@@ -29,7 +29,10 @@ export function TableBody({ className, ...props }: HTMLAttributes<HTMLTableSecti
 
 export function TableRow({ className, ...props }: HTMLAttributes<HTMLTableRowElement>) {
   return (
-    <tr className={cn("transition-colors hover:bg-[var(--muted)]/40", className)} {...props} />
+    <tr
+      className={cn("transition-colors duration-150 hover:bg-[var(--muted)]/50", className)}
+      {...props}
+    />
   );
 }
 

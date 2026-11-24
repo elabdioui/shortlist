@@ -18,7 +18,7 @@ OUTPUT RULES:
 - For each criterion in the criteria grid, return:
   - `id`: exact criterion id
   - `verdict`: one of `"yes"`, `"partial"`, `"no"`, `"not_found"`
-  - `quote`: a full verbatim phrase (>= 4 words or >= 20 characters) copied from the CV text supporting the verdict.
+  - `quote`: a single continuous verbatim substring (>= 4 words or >= 20 characters) copied directly from the CV text supporting the verdict. NEVER use `"..."` / ellipsis and NEVER concatenate two separate sentences from different parts of the CV.
     - For `"yes"` and `"partial"`: MUST quote the supporting phrase from the CV.
     - For `"no"`: MUST quote the contradicting phrase from the CV (for example, explicit statement of fewer years or a different specialization). If no contradicting phrase exists in the CV because the topic is simply absent, use `"not_found"` with `quote: ""` instead of `"no"`.
     - For `"not_found"`: use `quote: ""`.

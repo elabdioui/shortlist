@@ -65,6 +65,29 @@ def _is_off_page(bbox: tuple[float, float, float, float], width: float, height: 
     return x1 < 0.0 or y1 < 0.0 or x0 > width or y0 > height
 
 
+def _non_white_fill_rects(page: fitz.Page) -> list[fitz.Rect]:
+    """Return bounding rects of filled drawings that are visibly non-white."""
+    rects: list[fitz.Rect] = []
+    for drawing in page.get_drawings():
+        fill = drawing.get("fill")
+        rect = drawing.get("rect")
+        if fill is None or rect is None or len(fill) < 3:
+            continue
+        if any(float(channel) < 0.85 for channel in fill[:3]):
+            rects.append(fitz.Rect(rect))
+    return rects
+
+
+def _has_colored_background(
+    bbox: tuple[float, float, float, float],
+    colored_rects: list[fitz.Rect],
+) -> bool:
+    cx = (bbox[0] + bbox[2]) / 2.0
+    cy = (bbox[1] + bbox[3]) / 2.0
+    point = fitz.Point(cx, cy)
+    return any(rect.contains(point) for rect in colored_rects)
+
+
 def _extract_visible_blocks_and_findings(
     page: fitz.Page,
     page_number: int,
@@ -73,6 +96,7 @@ def _extract_visible_blocks_and_findings(
     page_dict: dict[str, Any] = page.get_text("dict", clip=fitz.INFINITE_RECT())
     width = float(page.rect.width)
     height = float(page.rect.height)
+    colored_rects = _non_white_fill_rects(page)
 
     visible_blocks: list[_TextBlock] = []
     findings: list[HiddenTextFinding] = []
@@ -105,7 +129,7 @@ def _extract_visible_blocks_and_findings(
                 reason: str | None = None
                 if size < MIN_VISIBLE_FONT_SIZE_PT:
                     reason = "font_below_2pt"
-                elif _is_white_color(color):
+                elif _is_white_color(color) and not _has_colored_background(bbox, colored_rects):
                     reason = "white_on_white"
                 elif alpha == 0:
                     reason = "zero_opacity"
