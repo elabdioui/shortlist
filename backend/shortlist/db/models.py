@@ -250,6 +250,7 @@ class AnalysisRun(Base):
     job_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    criteria_set_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default=RunStatus.PENDING.value)
     processed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
