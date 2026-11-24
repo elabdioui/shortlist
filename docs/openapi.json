@@ -396,6 +396,17 @@
       "AnalysisRunResponse": {
         "description": "Status and progress of a batch analysis run.",
         "properties": {
+          "criteria_set_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Criteria Set Version"
+          },
           "cumulative_cost_usd": {
             "minimum": 0.0,
             "title": "Cumulative Cost Usd",
