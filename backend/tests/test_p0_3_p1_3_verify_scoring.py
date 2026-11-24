@@ -1,7 +1,7 @@
 # Copyright (C) 2026 Shortlist Contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-"""Test-first regression suite for P0-3 (NO verification & scoring v2) and P1-3 (quote length & offset mapping)."""
+"""Test-first regression suite for P0-3 and P1-3 (verify & scoring v2)."""
 
 from __future__ import annotations
 

@@ -154,7 +154,9 @@ def test_p0_1_pii_cases_yaml_and_outgoing_leak_check() -> None:
         evaluate_cv(res.anonymized_text, "Job", criteria, client)
         payload = "\n".join(m.content for req in client.recorded_requests for m in req.messages)
         for sensitive in case["must_redact"]:
-            assert sensitive not in payload, f"[{case['id']}] PII leaked in LLM payload: {sensitive}"
+            assert sensitive not in payload, (
+                f"[{case['id']}] PII leaked in LLM payload: {sensitive}"
+            )
 
 
 def test_p0_1_all_30_eval_cvs_no_pii_leak_in_outgoing_llm_payload() -> None:
