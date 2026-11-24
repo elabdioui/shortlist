@@ -3,9 +3,9 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Lock, Plus, Sparkles, Trash2 } from "lucide-react";
+import { ArrowRight, ChevronDown, Lock, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,15 @@ import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { ApiError, jobsApi, providersApi } from "@/lib/api/client";
 import type { CriterionItem, JobResponse } from "@/lib/api/types";
 
-export function CriteriaEditorTab({ job }: { job: JobResponse }) {
+export function CriteriaEditorTab({
+  job,
+  evaluatedCount = 0,
+  onNext,
+}: {
+  job: JobResponse;
+  evaluatedCount?: number;
+  onNext?: () => void;
+}) {
   const t = useTranslations();
   const queryClient = useQueryClient();
 
@@ -40,6 +48,7 @@ export function CriteriaEditorTab({ job }: { job: JobResponse }) {
   const [feedback, setFeedback] = useState<{ type: "success" | "danger"; text: string } | null>(
     null
   );
+  const [justSaved, setJustSaved] = useState(false);
 
   useEffect(() => {
     if (criteriaQuery.data?.criteria) {
@@ -58,7 +67,7 @@ export function CriteriaEditorTab({ job }: { job: JobResponse }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["job", job.id] });
       queryClient.invalidateQueries({ queryKey: ["job", job.id, "estimate"] });
-      setFeedback({ type: "success", text: t("common.save") });
+      setFeedback({ type: "success", text: t("job.criteria.settingsSaved") });
     },
     onError: (err) => {
       setFeedback({
@@ -74,6 +83,7 @@ export function CriteriaEditorTab({ job }: { job: JobResponse }) {
       setCriteria(res.criteria);
       setRejectedDiscriminatory(res.rejected_discriminatory ?? []);
       setFeedback(null);
+      setJustSaved(false);
     },
     onError: (err) => {
       setFeedback({
@@ -89,6 +99,7 @@ export function CriteriaEditorTab({ job }: { job: JobResponse }) {
       queryClient.invalidateQueries({ queryKey: ["job", job.id, "criteria"] });
       queryClient.invalidateQueries({ queryKey: ["job", job.id] });
       setFeedback({ type: "success", text: t("job.criteria.savedSuccess") });
+      setJustSaved(true);
     },
     onError: (err) => {
       setFeedback({
@@ -122,81 +133,99 @@ export function CriteriaEditorTab({ job }: { job: JobResponse }) {
 
   const version = criteriaQuery.data?.version ?? 1;
   const isFrozen = Boolean(criteriaQuery.data?.frozen_at);
+  const savedCriteria = criteriaQuery.data?.criteria;
+  const isDirty = useMemo(
+    () => JSON.stringify(criteria) !== JSON.stringify(savedCriteria ?? []),
+    [criteria, savedCriteria]
+  );
+
+  function handleGenerate() {
+    if (criteria.length > 0 && !window.confirm(t("job.criteria.regenerateConfirm"))) return;
+    generateMutation.mutate();
+  }
+
+  const settingsCard = (
+    <details className="group rounded-xl border border-[var(--border)] bg-[var(--card)]">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4">
+        <div>
+          <div className="text-sm font-semibold">{t("job.criteria.settingsTitle")}</div>
+          <div className="text-xs text-[var(--muted-foreground)]">
+            {t("job.criteria.settingsHint")}
+          </div>
+        </div>
+        <ChevronDown className="h-4 w-4 text-[var(--muted-foreground)] transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="border-t border-[var(--border)] px-5 py-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="job-profile">{t("job.criteria.profile")}</Label>
+            <Select
+              id="job-profile"
+              value={profileId}
+              onChange={(e) => setProfileId(e.target.value)}
+            >
+              <option value="">{t("job.criteria.noProfile")}</option>
+              {(profilesQuery.data ?? []).map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.strategy})
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="job-budget">{t("job.criteria.maxBudget")}</Label>
+            <Input
+              id="job-budget"
+              type="number"
+              min="0"
+              step="0.01"
+              value={maxBudget}
+              onChange={(e) => setMaxBudget(e.target.value)}
+              placeholder="5.00"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="job-interview-threshold">{t("job.criteria.interviewThreshold")}</Label>
+            <Input
+              id="job-interview-threshold"
+              type="number"
+              min="0"
+              max="100"
+              value={interviewThreshold}
+              onChange={(e) => setInterviewThreshold(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="job-review-threshold">{t("job.criteria.reviewThreshold")}</Label>
+            <Input
+              id="job-review-threshold"
+              type="number"
+              min="0"
+              max="100"
+              value={reviewThreshold}
+              onChange={(e) => setReviewThreshold(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="mt-4 flex justify-end">
+          <Button
+            variant="outline"
+            onClick={() => updateJobMutation.mutate()}
+            disabled={updateJobMutation.isPending}
+          >
+            {updateJobMutation.isPending ? t("common.saving") : t("job.criteria.saveSettings")}
+          </Button>
+        </div>
+        <p className="mt-3 text-xs text-[var(--muted-foreground)]">
+          {t("job.criteria.thresholdsHelp")}
+        </p>
+      </div>
+    </details>
+  );
 
   return (
     <div className="space-y-6">
       {feedback && <Alert variant={feedback.type}>{feedback.text}</Alert>}
-
-      {/* Job settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("job.criteria.jobDetails")}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="job-profile">{t("job.criteria.profile")}</Label>
-              <Select
-                id="job-profile"
-                value={profileId}
-                onChange={(e) => setProfileId(e.target.value)}
-              >
-                <option value="">{t("job.criteria.noProfile")}</option>
-                {(profilesQuery.data ?? []).map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} ({p.strategy})
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="job-budget">{t("job.criteria.maxBudget")}</Label>
-              <Input
-                id="job-budget"
-                type="number"
-                min="0"
-                step="0.01"
-                value={maxBudget}
-                onChange={(e) => setMaxBudget(e.target.value)}
-                placeholder="5.00"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="job-interview-threshold">
-                {t("job.criteria.interviewThreshold")}
-              </Label>
-              <Input
-                id="job-interview-threshold"
-                type="number"
-                min="0"
-                max="100"
-                value={interviewThreshold}
-                onChange={(e) => setInterviewThreshold(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="job-review-threshold">{t("job.criteria.reviewThreshold")}</Label>
-              <Input
-                id="job-review-threshold"
-                type="number"
-                min="0"
-                max="100"
-                value={reviewThreshold}
-                onChange={(e) => setReviewThreshold(e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="mt-4 flex justify-end">
-            <Button
-              variant="outline"
-              onClick={() => updateJobMutation.mutate()}
-              disabled={updateJobMutation.isPending}
-            >
-              {updateJobMutation.isPending ? t("common.saving") : t("job.criteria.saveSettings")}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Criteria Grid */}
       <Card>
@@ -209,11 +238,12 @@ export function CriteriaEditorTab({ job }: { job: JobResponse }) {
                 ? t("job.criteria.frozenBadge", { version })
                 : t("job.criteria.draftBadge", { version })}
             </Badge>
+            {isDirty && <Badge variant="warning">{t("job.criteria.unsaved")}</Badge>}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="secondary"
-              onClick={() => generateMutation.mutate()}
+              onClick={handleGenerate}
               disabled={generateMutation.isPending}
             >
               <Sparkles className="h-4 w-4" />
@@ -320,20 +350,46 @@ export function CriteriaEditorTab({ job }: { job: JobResponse }) {
             </div>
           )}
 
+          {isDirty && isFrozen && evaluatedCount > 0 && (
+            <Alert variant="warning" className="text-xs">
+              {t("job.criteria.newVersionNotice", { next: version + 1 })}
+            </Alert>
+          )}
+
           {criteria.length > 0 && (
-            <div className="flex justify-end pt-2">
-              <Button
-                onClick={() => saveCriteriaMutation.mutate()}
-                disabled={saveCriteriaMutation.isPending}
-              >
-                {saveCriteriaMutation.isPending
-                  ? t("common.saving")
-                  : t("job.criteria.saveCriteria")}
-              </Button>
+            <div className="sticky bottom-3 z-10 flex flex-wrap items-center justify-end gap-2 rounded-lg border border-[var(--border)] bg-[var(--card)]/95 p-2 shadow-sm backdrop-blur">
+              {isDirty && savedCriteria && savedCriteria.length > 0 && (
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setCriteria(savedCriteria);
+                    setRejectedDiscriminatory([]);
+                  }}
+                >
+                  {t("job.criteria.discard")}
+                </Button>
+              )}
+              {!isDirty && justSaved && onNext ? (
+                <Button onClick={onNext}>
+                  <span>{t("job.criteria.nextStep")}</span>
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => saveCriteriaMutation.mutate()}
+                  disabled={saveCriteriaMutation.isPending || !isDirty}
+                >
+                  {saveCriteriaMutation.isPending
+                    ? t("common.saving")
+                    : t("job.criteria.saveCriteria")}
+                </Button>
+              )}
             </div>
           )}
         </CardContent>
       </Card>
+
+      {settingsCard}
     </div>
   );
 }

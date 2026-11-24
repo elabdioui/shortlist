@@ -76,9 +76,9 @@
   "job": {
     "backToDashboard": "Retour aux offres",
     "tabs": {
-      "criteria": "1. Grille de critères",
-      "upload": "2. Import des CV & Lancement",
-      "ranking": "3. Classement"
+      "criteria": "Critères",
+      "upload": "CV",
+      "ranking": "Classement"
     },
     "criteria": {
       "jobDetails": "Paramètres de l'offre",
@@ -102,7 +102,16 @@
       "mandatory": "Obligatoire",
       "bonus": "Bonus",
       "weight": "Poids (1 à 5)",
-      "savedSuccess": "Grille enregistrée avec succès."
+      "savedSuccess": "Grille enregistrée avec succès.",
+      "unsaved": "Modifications non enregistrées",
+      "regenerateConfirm": "Remplacer la grille actuelle par une nouvelle proposition de l'IA ? Vos modifications non enregistrées seront perdues.",
+      "newVersionNotice": "Cette grille a déjà servi à analyser des CV. L'enregistrer crée la version v{next}, et les CV devront être réanalysés.",
+      "settingsTitle": "Paramètres avancés",
+      "settingsHint": "Profil IA, budget et seuils de recommandation.",
+      "settingsSaved": "Paramètres enregistrés.",
+      "nextStep": "Étape suivante : importer les CV",
+      "thresholdsHelp": "Entretien : score ≥ seuil entretien et tous les obligatoires validés. Non retenu : score < seuil « à revoir » ou un obligatoire explicitement contredit. Sinon : à revoir.",
+      "discard": "Annuler les modifications"
     },
     "upload": {
       "dropzoneTitle": "Glissez-déposez vos CV ici",
@@ -125,7 +134,8 @@
       "cumulativeCost": "Coût cumulé : {cost}",
       "runCompleted": "Analyse terminée ! Consultez l'onglet Classement.",
       "runPausedBudget": "Analyse mise en pause : budget maximum atteint.",
-      "runFailed": "L'analyse a rencontré une erreur."
+      "runFailed": "L'analyse a rencontré une erreur.",
+      "uploadedHint": "Les CV sont ajoutés. Lancez l'analyse depuis le bandeau en haut de la page."
     },
     "ranking": {
       "summaryTotal": "Total",
@@ -149,7 +159,57 @@
       "colOpen": "Détail",
       "openDetail": "Ouvrir la fiche",
       "fallbackBadge": "Repli",
-      "emptyRanking": "Aucun CV classé pour le moment. Importez des CV et lancez l'analyse."
+      "emptyRanking": "Aucun CV classé pour le moment. Importez des CV et lancez l'analyse.",
+      "colStatus": "Statut",
+      "status": {
+        "done": "Analysé",
+        "queued": "En file d'attente",
+        "running": "Analyse en cours",
+        "failed": "Échec",
+        "not_analyzed": "Non analysé"
+      },
+      "staleBadge": "Grille modifiée",
+      "staleHint": "Score calculé avec la grille v{version}. Relancez l'analyse pour le mettre à jour.",
+      "summaryUnscored": "Sans score",
+      "errors": {
+        "rate_limit": "Quota ou limite de débit du fournisseur IA atteint.",
+        "overloaded": "Fournisseur IA temporairement surchargé.",
+        "timeout": "Le fournisseur IA n'a pas répondu à temps.",
+        "auth": "Clé API refusée par le fournisseur (invalide ou révoquée).",
+        "no_keys": "Aucune clé API utilisable (quota journalier, budget ou modèle non autorisé).",
+        "all_failed": "Tous les modèles configurés ont échoué.",
+        "unknown": "Erreur inattendue pendant l'analyse de ce CV."
+      }
+    },
+    "thresholds": "Seuils : entretien ≥ {interview} · à revoir ≥ {review}",
+    "steps": {
+      "criteriaTodo": "À définir",
+      "criteriaDone": "{count} critères · v{version}",
+      "uploadTodo": "Aucun CV importé",
+      "uploadDone": "{count} CV importé(s)",
+      "rankingTodo": "Pas encore analysé",
+      "rankingRunning": "Analyse en cours…",
+      "rankingDone": "{evaluated}/{total} analysé(s)",
+      "rankingFailed": "{count} en échec"
+    },
+    "run": {
+      "needCriteria": "Étape 1 : définissez la grille de critères avant d'analyser des CV.",
+      "goCriteria": "Définir les critères",
+      "needCvs": "Étape 2 : importez les CV des candidats.",
+      "goUpload": "Importer des CV",
+      "readyTitle": "{count} CV à analyser",
+      "retryTitle": "{count} CV à analyser, dont {failed} en échec lors de la dernière analyse",
+      "readyDetail": "Durée estimée {duration} · coût estimé {cost}",
+      "allDone": "Tous les CV sont analysés avec la grille v{version}.",
+      "start": "Lancer l'analyse",
+      "retry": "Relancer l'analyse",
+      "starting": "Lancement…",
+      "runningTitle": "Analyse en cours : {processed}/{total} CV",
+      "runningHint": "Vous pouvez changer d'onglet ou fermer la page, l'analyse continue en arrière-plan. Les erreurs temporaires du fournisseur (quota, surcharge) sont relancées automatiquement.",
+      "finishedOk": "Analyse terminée : {count} CV évalué(s).",
+      "finishedWithFailures": "Analyse terminée, mais {failed} CV n'ont pas pu être évalués (voir la colonne Statut du classement).",
+      "pausedBudget": "Analyse en pause : budget maximum de l'offre atteint. Augmentez-le dans les paramètres avancés de l'onglet Critères, puis relancez.",
+      "viewRanking": "Voir le classement"
     }
   },
   "recommendations": {
@@ -198,7 +258,23 @@
     "saveDecision": "Enregistrer la décision",
     "decisionSaved": "Décision enregistrée.",
     "deleteCandidate": "Effacer ce candidat",
-    "deleteCandidateConfirm": "Supprimer définitivement ce candidat et son CV (droit à l'effacement) ?"
+    "deleteCandidateConfirm": "Supprimer définitivement ce candidat et son CV (droit à l'effacement) ?",
+    "whyTitle": "Pourquoi cette recommandation ?",
+    "why": {
+      "mandatoryNo": "Critère obligatoire contredit par le CV : {label}",
+      "belowReview": "Score {score} inférieur au seuil « à revoir » ({threshold})",
+      "mandatoryIncomplete": "Critère obligatoire non démontré : {label}",
+      "belowInterview": "Score {score} sous le seuil entretien ({threshold})",
+      "allGood": "Score ≥ {threshold} et tous les critères obligatoires validés",
+      "manual": "Lecture manuelle requise : extraction impossible, texte caché détecté ou réponse IA invalide."
+    },
+    "unsavedOverrides": "Corrections non enregistrées",
+    "saveOverrides": "Enregistrer",
+    "prevCandidate": "Précédent",
+    "nextCandidate": "Suivant",
+    "positionOf": "{index} / {total}",
+    "decisionSavedShort": "Décision enregistrée",
+    "noEvaluationHint": "Retournez à l'offre pour lancer ou relancer l'analyse."
   },
   "providers": {
     "title": "Fournisseurs IA et clés IA",

@@ -3,7 +3,18 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ArrowLeft, CheckCircle2, RotateCcw, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  RotateCcw,
+  ThumbsDown,
+  ThumbsUp,
+  Trash2,
+} from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -17,7 +28,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label, Select, Textarea } from "@/components/ui/input";
 import { ApiError, candidatesApi, jobsApi } from "@/lib/api/client";
 import type { CriterionVerdict, HumanDecision, Recommendation } from "@/lib/api/types";
-import { computeScorePreview } from "@/lib/utils";
+import { cn, computeScorePreview, explainRecommendation } from "@/lib/utils";
 
 const CvViewer = dynamic(
   () => import("@/components/candidates/CvViewer").then((mod) => mod.CvViewer),
@@ -77,6 +88,12 @@ export default function CandidateDetailPage() {
     enabled: Boolean(jobId),
   });
 
+  const rankingQuery = useQuery({
+    queryKey: ["job", jobId, "ranking", "", "", ""],
+    queryFn: () => jobsApi.getRanking(jobId!, { limit: 500, offset: 0 }),
+    enabled: Boolean(jobId),
+  });
+
   const previewQuery = useQuery({
     queryKey: ["candidate", params.id, "preview"],
     queryFn: () => candidatesApi.getAnonymizedPreview(params.id),
@@ -132,9 +149,9 @@ export default function CandidateDetailPage() {
   }, [criteriaQuery.data?.criteria, effectiveVerdicts, jobQuery.data]);
 
   const saveDecisionMutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (nextDecision?: HumanDecision) =>
       candidatesApi.saveDecision(params.id, {
-        decision,
+        decision: nextDecision ?? decision,
         note: note.trim() || null,
         verdict_overrides: overrides,
       }),
@@ -179,11 +196,37 @@ export default function CandidateDetailPage() {
   function handleSubmitDecision(e: FormEvent) {
     e.preventDefault();
     setSavedBanner(false);
-    saveDecisionMutation.mutate();
+    saveDecisionMutation.mutate(undefined);
   }
 
   const candidate = candidateQuery.data;
   const evaluation = candidate?.evaluation;
+
+  const savedOverrides = candidate?.decision?.verdict_overrides ?? {};
+  const overridesDirty = JSON.stringify(overrides) !== JSON.stringify(savedOverrides);
+
+  const reasons = useMemo(() => {
+    if (!liveScore || !evaluation) return [];
+    if ((liveScore.recommendation as string) === "manual_review") return [];
+    return explainRecommendation(
+      criteriaQuery.data?.criteria ?? [],
+      effectiveVerdicts,
+      liveScore.score,
+      jobQuery.data?.interview_threshold ?? 70,
+      jobQuery.data?.review_threshold ?? 45
+    );
+  }, [liveScore, evaluation, criteriaQuery.data?.criteria, effectiveVerdicts, jobQuery.data]);
+
+  const rankedIds = (rankingQuery.data?.items ?? []).map((item) => item.id);
+  const position = rankedIds.indexOf(params.id);
+  const prevId = position > 0 ? rankedIds[position - 1] : null;
+  const nextId = position >= 0 && position < rankedIds.length - 1 ? rankedIds[position + 1] : null;
+
+  function decide(next: HumanDecision) {
+    setDecision(next);
+    setSavedBanner(false);
+    saveDecisionMutation.mutate(next);
+  }
   const criteriaById = useMemo(() => {
     const map: Record<string, { label: string; type: string; weight: number }> = {};
     for (const c of criteriaQuery.data?.criteria ?? []) {
@@ -210,18 +253,45 @@ export default function CandidateDetailPage() {
           </div>
 
           {candidate && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                if (window.confirm(t("candidate.deleteCandidateConfirm"))) {
-                  deleteCandidateMutation.mutate();
-                }
-              }}
-            >
-              <Trash2 className="h-4 w-4 text-rose-500" />
-              <span>{t("candidate.deleteCandidate")}</span>
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              {position >= 0 && rankedIds.length > 1 && (
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!prevId}
+                    onClick={() => prevId && router.push(`/candidates/${prevId}`)}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    <span>{t("candidate.prevCandidate")}</span>
+                  </Button>
+                  <span className="px-1 text-xs tabular-nums text-[var(--muted-foreground)]">
+                    {t("candidate.positionOf", { index: position + 1, total: rankedIds.length })}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!nextId}
+                    onClick={() => nextId && router.push(`/candidates/${nextId}`)}
+                  >
+                    <span>{t("candidate.nextCandidate")}</span>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (window.confirm(t("candidate.deleteCandidateConfirm"))) {
+                    deleteCandidateMutation.mutate();
+                  }
+                }}
+              >
+                <Trash2 className="h-4 w-4 text-rose-500" />
+                <span>{t("candidate.deleteCandidate")}</span>
+              </Button>
+            </div>
           )}
         </div>
 
@@ -320,6 +390,78 @@ export default function CandidateDetailPage() {
                     </Badge>
                   )}
                 </CardContent>
+
+                {evaluation && (
+                  <div className="border-t border-[var(--border)] px-5 py-3">
+                    <div className="mb-1.5 text-xs font-medium">{t("candidate.whyTitle")}</div>
+                    {evaluation.recommendation === "manual_review" ? (
+                      <p className="text-xs text-[var(--muted-foreground)]">
+                        {t("candidate.why.manual")}
+                      </p>
+                    ) : (
+                      <ul className="space-y-0.5 text-xs text-[var(--muted-foreground)]">
+                        {reasons.map((r, i) => (
+                          <li key={i} className="flex gap-1.5">
+                            <span aria-hidden>•</span>
+                            <span>
+                              {r.code === "mandatoryNo" || r.code === "mandatoryIncomplete"
+                                ? t(`candidate.why.${r.code}`, { label: r.label })
+                                : r.code === "allGood"
+                                  ? t("candidate.why.allGood", { threshold: r.threshold })
+                                  : t(`candidate.why.${r.code}`, {
+                                      score: r.score,
+                                      threshold: r.threshold,
+                                    })}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] px-5 py-3">
+                  <span className="mr-1 text-xs font-medium">
+                    {t("candidate.humanDecisionTitle")}
+                  </span>
+                  {(
+                    [
+                      ["shortlisted", ThumbsUp, "border-emerald-600 bg-emerald-600 text-white"],
+                      [
+                        "pending",
+                        Clock,
+                        "border-[var(--foreground)] bg-[var(--foreground)] text-[var(--background)]",
+                      ],
+                      ["rejected", ThumbsDown, "border-rose-600 bg-rose-600 text-white"],
+                    ] as const
+                  ).map(([value, Icon, activeClass]) => (
+                    <Button
+                      key={value}
+                      size="sm"
+                      variant="outline"
+                      aria-pressed={decision === value}
+                      disabled={saveDecisionMutation.isPending}
+                      onClick={() => decide(value)}
+                      className={cn(decision === value && activeClass)}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      <span>{t(`decisions.${value}`)}</span>
+                    </Button>
+                  ))}
+                  {overridesDirty && (
+                    <span className="ml-auto flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300">
+                      {t("candidate.unsavedOverrides")}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={saveDecisionMutation.isPending}
+                        onClick={() => saveDecisionMutation.mutate(undefined)}
+                      >
+                        {t("candidate.saveOverrides")}
+                      </Button>
+                    </span>
+                  )}
+                </div>
               </Card>
 
               {/* Criteria Verdicts */}
@@ -329,8 +471,16 @@ export default function CandidateDetailPage() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {!evaluation ? (
-                    <div className="text-sm text-[var(--muted-foreground)]">
-                      {t("candidate.noEvaluation")}
+                    <div className="space-y-2 text-sm text-[var(--muted-foreground)]">
+                      <p>{t("candidate.noEvaluation")}</p>
+                      {jobId && (
+                        <Link
+                          href={`/jobs/${jobId}?tab=ranking`}
+                          className="text-xs underline underline-offset-2"
+                        >
+                          {t("candidate.noEvaluationHint")}
+                        </Link>
+                      )}
                     </div>
                   ) : (
                     evaluation.verdicts.map((v) => {

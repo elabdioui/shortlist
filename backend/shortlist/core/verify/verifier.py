@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import re
+
 from rapidfuzz import fuzz
 
 from shortlist.schemas.candidates import (
@@ -18,6 +20,16 @@ from shortlist.schemas.common import CriterionVerdict
 DEFAULT_MATCH_THRESHOLD = 90.0
 MIN_QUOTE_WORDS = 4
 MIN_QUOTE_CHARS = 20
+# Shorter quotes are accepted only on an exact, whole-word match.
+MIN_EXACT_SHORT_CHARS = 10
+# Fragments shorter than this inside a multi-part quote are too generic to verify.
+MIN_FRAGMENT_CHARS = 12
+
+# LLMs often elide text ("A ... B") or stitch two nearby sentences together even
+# when told not to. Such quotes are split here and every fragment must be found.
+_ELLIPSIS_RE = re.compile(r"\s*(?:\.{3,}|…|\[\.\.\.\]|\(\.\.\.\))\s*")
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.;!?])\s+|\n+")
+_FRAGMENT_STRIP_CHARS = " \t\r\n-\u2022\u2013\u2014"
 
 
 def _is_sufficient_quote(
@@ -55,7 +67,90 @@ def _normalize_with_offset_map(text: str) -> tuple[str, list[int]]:
     return "".join(norm_chars), orig_indices
 
 
+def _split_fragments(quote: str) -> list[str]:
+    """Split an elided or stitched quote into its verbatim fragments."""
+    parts: list[str] = []
+    for chunk in _ELLIPSIS_RE.split(quote):
+        parts.extend(p.strip(_FRAGMENT_STRIP_CHARS) for p in _SENTENCE_SPLIT_RE.split(chunk))
+    return [p for p in parts if p]
+
+
 def verify_quote(
+    quote: str,
+    cv_text: str,
+    *,
+    threshold: float = DEFAULT_MATCH_THRESHOLD,
+    min_words: int = MIN_QUOTE_WORDS,
+    min_chars: int = MIN_QUOTE_CHARS,
+) -> QuoteSpan | None:
+    """Locate a quote in CV text, tolerating ellipses and stitched sentences.
+
+    The whole quote is tried first. If it does not match, it is split on
+    ellipses and sentence/line boundaries; the quote is then verified only if
+    *every* fragment of meaningful length matches the CV on its own and the
+    fragments together are long enough. The returned span covers the
+    fragments when they are close together, otherwise the longest fragment.
+    """
+    span = _match_quote(
+        quote, cv_text, threshold=threshold, min_words=min_words, min_chars=min_chars
+    )
+    if span is not None or not cv_text:
+        return span
+
+    short_span = _exact_short_match(quote, cv_text)
+    if short_span is not None:
+        return short_span
+
+    fragments = _split_fragments(quote)
+    if len(fragments) < 2:
+        return None
+    meaningful = [f for f in fragments if len(f) >= MIN_FRAGMENT_CHARS]
+    if not meaningful or sum(len(f) for f in meaningful) < min_chars:
+        return None
+    # Short leftover pieces (e.g. a lone "and") must not hide an unverifiable part.
+    if sum(len(f) for f in fragments if len(f) < MIN_FRAGMENT_CHARS) > 20:
+        return None
+
+    spans: list[QuoteSpan] = []
+    for frag in meaningful:
+        frag_span = _match_quote(frag, cv_text, threshold=threshold, min_words=1, min_chars=1)
+        if frag_span is None:
+            return None
+        spans.append(frag_span)
+
+    start = min(sp.start for sp in spans)
+    end = max(sp.end for sp in spans)
+    score = round(min(sp.match_score for sp in spans), 2)
+    quoted_len = sum(sp.end - sp.start for sp in spans)
+    if end - start <= quoted_len + 400:
+        return QuoteSpan(start=start, end=end, match_score=score)
+    longest = max(spans, key=lambda sp: sp.end - sp.start)
+    return QuoteSpan(start=longest.start, end=longest.end, match_score=score)
+
+
+def _exact_short_match(quote: str, cv_text: str) -> QuoteSpan | None:
+    """Accept a short quote (e.g. "English - Fluent") only if it appears verbatim.
+
+    Fuzzy matching of short strings is unreliable, so quotes under the normal
+    length minimum are rejected, except when they occur exactly (ignoring case
+    and whitespace) as whole words in the CV and still carry some content:
+    at least MIN_EXACT_SHORT_CHARS characters and two words.
+    """
+    norm_quote = " ".join(quote.split())
+    if len(norm_quote) < MIN_EXACT_SHORT_CHARS or len(norm_quote.split()) < 2:
+        return None
+    norm_cv, orig_indices = _normalize_with_offset_map(cv_text)
+    match = re.search(rf"(?<!\w){re.escape(norm_quote)}(?!\w)", norm_cv, re.IGNORECASE)
+    if match is None:
+        return None
+    return QuoteSpan(
+        start=orig_indices[match.start()],
+        end=orig_indices[match.end() - 1] + 1,
+        match_score=100.0,
+    )
+
+
+def _match_quote(
     quote: str,
     cv_text: str,
     *,

@@ -708,6 +708,33 @@
       "CandidateSummary": {
         "description": "Candidate row in job ranking tables.",
         "properties": {
+          "analysis_error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analysis Error Code"
+          },
+          "analysis_status": {
+            "default": "not_analyzed",
+            "title": "Analysis Status",
+            "type": "string"
+          },
+          "criteria_set_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Criteria Set Version"
+          },
           "decision": {
             "$ref": "#/components/schemas/HumanDecision",
             "default": "pending"
@@ -727,6 +754,11 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "is_stale": {
+            "default": false,
+            "title": "Is Stale",
+            "type": "boolean"
           },
           "job_id": {
             "title": "Job Id",
@@ -1059,10 +1091,38 @@
       "EstimateResponse": {
         "description": "Pre-run cost and duration estimate for a job.",
         "properties": {
+          "active_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Run Id"
+          },
           "candidate_count": {
             "minimum": 0.0,
             "title": "Candidate Count",
             "type": "integer"
+          },
+          "criteria_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Criteria Count",
+            "type": "integer"
+          },
+          "criteria_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Criteria Version"
           },
           "duplicate_count": {
             "minimum": 0.0,
@@ -1079,9 +1139,27 @@
             "title": "Estimated Duration Seconds",
             "type": "integer"
           },
+          "evaluated_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Evaluated Count",
+            "type": "integer"
+          },
+          "failed_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Failed Count",
+            "type": "integer"
+          },
           "job_id": {
             "title": "Job Id",
             "type": "string"
+          },
+          "pending_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Pending Count",
+            "type": "integer"
           },
           "provider_label": {
             "anyOf": [

@@ -27,6 +27,9 @@ def create_db_engine(database_url: str | None = None) -> Engine:
     connect_args: dict[str, Any] = {}
     if url.startswith("sqlite"):
         connect_args["check_same_thread"] = False
+        # Worker threads and the API write concurrently: wait for the write
+        # lock instead of failing after sqlite3's default 5 seconds.
+        connect_args["timeout"] = 30
         # Ensure parent directory exists for file-backed SQLite databases.
         if url.startswith("sqlite:///") and not url.endswith(":memory:"):
             db_path = Path(url.removeprefix("sqlite:///"))

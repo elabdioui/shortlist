@@ -228,8 +228,11 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent className="flex items-center justify-between gap-2 border-t border-[var(--border)] pt-3">
                   <div className="flex items-center gap-3 text-xs text-[var(--muted-foreground)]">
-                    <span className="font-mono text-[11px]">
-                      {job.interview_threshold}/{job.review_threshold}
+                    <span className="text-[11px]">
+                      {t("job.thresholds", {
+                        interview: job.interview_threshold,
+                        review: job.review_threshold,
+                      })}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5">

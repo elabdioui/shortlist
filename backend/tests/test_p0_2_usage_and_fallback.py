@@ -225,7 +225,11 @@ def test_key_failover_usage_log_and_budget_skip(
     with factory() as db:
         task2 = db.get(AnalysisTask, task2_id)
         assert task2 is not None
-        assert task2.status == "failed"
+        # Key A's cooldown is temporary, so the task is requeued with a delay
+        # (leased_until = "not before") instead of failing for good.
+        assert task2.status == "pending"
+        assert task2.leased_until is not None
+        assert "Retrying" in (task2.last_error or "")
         assert db.scalar(select(Evaluation).where(Evaluation.candidate_id == cand2_id)) is None
 
 

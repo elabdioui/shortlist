@@ -88,3 +88,11 @@ class EstimateResponse(BaseModel):
     estimated_duration_seconds: int = Field(ge=0)
     sends_external_data: bool
     provider_label: str | None = None
+    # Candidates the next run will send to the LLM (never evaluated with the
+    # current criteria version, including previous failures).
+    pending_count: int = Field(default=0, ge=0)
+    evaluated_count: int = Field(default=0, ge=0)
+    failed_count: int = Field(default=0, ge=0)
+    criteria_count: int = Field(default=0, ge=0)
+    criteria_version: int | None = None
+    active_run_id: str | None = None

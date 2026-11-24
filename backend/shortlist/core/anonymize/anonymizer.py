@@ -246,9 +246,11 @@ def _extract_email_derived_names(text: str) -> list[str]:
     derived: list[str] = []
     for match in _EMAIL_LOCAL_RE.finditer(text):
         local = match.group(1)
+        # Strip trailing digits so "asmae.samyh15" still yields ["asmae", "samyh"].
+        tokens = (re.sub(r"\d+$", "", p) for p in re.split(r"[._-]+", local))
         parts = [
             p
-            for p in re.split(r"[._-]+", local)
+            for p in tokens
             if len(p) >= 3 and p.isalpha() and p.lower() not in _GENERIC_EMAIL_TOKENS
         ]
         if len(parts) >= 2:
