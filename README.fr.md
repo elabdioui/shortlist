@@ -8,11 +8,21 @@
 
 ## Installation en 3 commandes
 
+**Linux / macOS :**
 ```bash
 git clone https://github.com/shortlist-org/shortlist.git && cd shortlist
-cp deploy/.env.example deploy/.env
+./deploy/init.sh
 docker compose -f deploy/docker-compose.yml up --build
 ```
+
+**Windows (PowerShell) :**
+```powershell
+git clone https://github.com/shortlist-org/shortlist.git; cd shortlist
+.\deploy\init.ps1
+docker compose -f deploy/docker-compose.yml up --build
+```
+
+`init.sh` / `init.ps1` crée `deploy/.env` et génère une clé Fernet `SHORTLIST_SECRET_KEY` aléatoire au premier lancement.
 
 - **Interface Web :** `http://localhost:3000` (français par défaut, anglais disponible)
 - **API & Documentation OpenAPI :** `http://localhost:8000/api/docs`

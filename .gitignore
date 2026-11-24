@@ -33,6 +33,8 @@ node_modules/
 frontend/.next/
 frontend/out/
 frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
 .pnpm-store/
 *.tsbuildinfo
 next-env.d.ts

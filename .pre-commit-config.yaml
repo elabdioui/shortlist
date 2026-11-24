@@ -23,3 +23,11 @@ repos:
       - id: check-yaml
       - id: check-added-large-files
         args: [--maxkb=1024]
+
+  - repo: local
+    hooks:
+      - id: forbid-runtime-artifacts
+        name: Block runtime DB, coverage, data, and test-results artifacts
+        entry: Runtime artifacts (*.db, .coverage, data/, test-results/) must not be committed
+        language: fail
+        files: '(^|/)(.*\.db|\.coverage|data/|test-results/)'

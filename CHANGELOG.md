@@ -4,6 +4,13 @@ All notable changes to **Shortlist** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-11-24
+
+### Fixed
+- **P0-1 / P2-1 (Docker & CI):** Installed `fr_core_news_md` & `en_core_web_md` spaCy models and `[postgres]` (`psycopg[binary]`) extra in `deploy/Dockerfile.api`, `deploy/Dockerfile.worker`, and `.github/workflows/ci.yml`; added a PostgreSQL 16 integration test job in CI.
+- **P1-4 (Secret Key Hardening):** Removed the insecure default `SHORTLIST_SECRET_KEY` fallback from `deploy/docker-compose.yml`; added `deploy/init.sh` and `deploy/init.ps1` to generate a random Fernet key into `deploy/.env` on first run, and updated `README.md` / `README.fr.md` install instructions.
+- **P2-3 (Repo Hygiene):** Untracked `frontend/test-results/`, added `frontend/test-results/` & `frontend/playwright-report/` to `.gitignore`, and added a `forbid-runtime-artifacts` pre-commit hook blocking `*.db`, `.coverage`, `data/`, and `test-results/`.
+
 ## [0.1.0] - 2026-11-24
 
 ### Added

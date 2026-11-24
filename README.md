@@ -8,11 +8,21 @@
 
 ## Quick Start (3 Commands)
 
+**Linux / macOS:**
 ```bash
 git clone https://github.com/shortlist-org/shortlist.git && cd shortlist
-cp deploy/.env.example deploy/.env
+./deploy/init.sh
 docker compose -f deploy/docker-compose.yml up --build
 ```
+
+**Windows (PowerShell):**
+```powershell
+git clone https://github.com/shortlist-org/shortlist.git; cd shortlist
+.\deploy\init.ps1
+docker compose -f deploy/docker-compose.yml up --build
+```
+
+`init.sh` / `init.ps1` creates `deploy/.env` and generates a strong random Fernet `SHORTLIST_SECRET_KEY` on first run.
 
 - **Web UI:** `http://localhost:3000` (French default, English toggle)
 - **API & OpenAPI docs:** `http://localhost:8000/api/docs`
