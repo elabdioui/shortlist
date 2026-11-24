@@ -86,6 +86,9 @@ export default function CandidateDetailPage() {
   const [note, setNote] = useState("");
   const [overrides, setOverrides] = useState<Record<string, CriterionVerdict>>({});
   const [highlightedQuote, setHighlightedQuote] = useState<string | null>(null);
+  const [highlightedSpan, setHighlightedSpan] = useState<{ start: number; end: number } | null>(
+    null
+  );
   const [savedBanner, setSavedBanner] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -97,9 +100,14 @@ export default function CandidateDetailPage() {
         setNote(dec.note ?? "");
         setOverrides(dec.verdict_overrides ?? {});
       }
-      const firstQuote = candidateQuery.data.evaluation?.verdicts.find((v) => v.quote)?.quote;
-      if (firstQuote) {
-        setHighlightedQuote(firstQuote);
+      const firstWithQuote = candidateQuery.data.evaluation?.verdicts.find((v) => v.quote);
+      if (firstWithQuote?.quote) {
+        setHighlightedQuote(firstWithQuote.quote);
+        setHighlightedSpan(
+          firstWithQuote.span
+            ? { start: firstWithQuote.span.start, end: firstWithQuote.span.end }
+            : null
+        );
       }
     }
   }, [candidateQuery.data]);
@@ -221,6 +229,7 @@ export default function CandidateDetailPage() {
                 previewText={previewQuery.data?.anonymized_text ?? null}
                 sendsExternalData={previewQuery.data?.sends_external_data ?? null}
                 highlightedQuote={highlightedQuote}
+                highlightedSpan={highlightedSpan}
               />
             </div>
 
@@ -288,7 +297,12 @@ export default function CandidateDetailPage() {
                         <div
                           key={v.id}
                           onClick={() => {
-                            if (v.quote) setHighlightedQuote(v.quote);
+                            if (v.quote) {
+                              setHighlightedQuote(v.quote);
+                              setHighlightedSpan(
+                                v.span ? { start: v.span.start, end: v.span.end } : null
+                              );
+                            }
                           }}
                           className="cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--background)] p-3 transition-colors hover:border-blue-400"
                         >
